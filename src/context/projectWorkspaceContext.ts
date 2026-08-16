@@ -1,26 +1,31 @@
 import { useOutletContext } from "react-router-dom";
-import type { Project, ProjectPermission } from "../types/dashboard";
+import type { Project, ProjectMilestone, ProjectObjective, ProjectPermission } from "../types/dashboard";
 import type { Task } from "../data/taskData";
 
-/**
- * Shared by every nested /projects/:projectId/* route. ProjectWorkspace
- * (the layout route) computes `project`/`projectTasks` once from the
- * existing TaskContext/ProjectContext and hands them down via
- * <Outlet context={...} /> — every tab reads from here instead of
- * re-deriving its own copy, so there's exactly one source of truth.
- */
 export interface ProjectWorkspaceContextValue {
   project: Project;
   projectTasks: Task[];
   isArchived: boolean;
-  /** The current user's resolved permission on this project (getProjectPermission()'s result). Tabs gate their own actions by passing this into canEditProjectContent()/canCommentOnProject()/canManageProject() from workspaceData.ts rather than comparing it directly. */
   permission: ProjectPermission;
-  /** Opens the "+ New Task" drawer, pre-locked to this project. */
+  /** Real WorkspaceRole OWNER/ADMIN — governs the project *entity* itself (edit/duplicate/archive/delete) and task creation, both workspace-role-gated on the backend rather than project-role-gated. See ProjectWorkspace.tsx's doc comment. */
+  canManageProjectEntity: boolean;
+
   openNewTaskDrawer: () => void;
   openEditDrawer: () => void;
   openDeleteModal: () => void;
   duplicateProject: () => void;
   archiveProject: () => void;
+
+  objectives: ProjectObjective[];
+  milestones: ProjectMilestone[];
+  objectivesLoading: boolean;
+  objectivesError: string | null;
+  addObjective: (text: string) => void;
+  toggleObjective: (id: string) => void;
+  removeObjective: (id: string) => void;
+  addMilestone: (title: string) => void;
+  toggleMilestone: (id: string) => void;
+  removeMilestone: (id: string) => void;
 }
 
 export function useProjectWorkspace(): ProjectWorkspaceContextValue {

@@ -1,24 +1,24 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Clock3, Circle, Target, Diamond, Plus, X, ArrowRight, Paperclip, MessagesSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import type { ProjectMilestone, ProjectObjective } from "../../types/dashboard";
+import type { ActivityEvent } from "../../types/workspace";
 import type { Status } from "../../data/taskData";
 import { getDueGroup } from "../../data/taskData";
 import { Pill } from "../ui/Pill";
 import { AvatarStack } from "../ui/AvatarStack";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
-import { useProjectContext } from "../../context/projectContextValue";
+import { useWorkspace } from "../../context/workspaceContextValue";
 import {
-  generateId,
   buildProjectActivityFeed,
-  readProjectActivity,
   readProjectDiscussions,
   readProjectFiles,
   formatRelativeTime,
   canEditProjectContent,
 } from "../../data/workspaceData";
+import { listActivity as listActivityRequest, type ActivityEventRecord } from "../../lib/activityApi";
 import { ACTIVITY_META } from "./activityMeta";
 
 const STATUS_META: { status: Status; label: string; icon: LucideIcon; color: string }[] = [
@@ -262,9 +262,24 @@ function MilestonesCard({ milestones, canEdit, onToggle, onAdd, onRemove }: {
 ============================================================ */
 
 export function ProjectOverviewTab() {
-  const { project, projectTasks: tasks, openNewTaskDrawer, permission } = useProjectWorkspace();
-  const { setProjects } = useProjectContext();
+  const {
+    project,
+    projectTasks: tasks,
+    openNewTaskDrawer,
+    permission,
+    objectives,
+    milestones,
+    objectivesLoading,
+    objectivesError,
+    addObjective,
+    toggleObjective,
+    removeObjective,
+    addMilestone,
+    toggleMilestone,
+    removeMilestone,
+  } = useProjectWorkspace();
   const canEdit = canEditProjectContent(permission);
+  const { currentWorkspaceId } = useWorkspace();
 
   const total = tasks.length;
   const recentTasks = tasks.slice(0, 5);
@@ -274,51 +289,61 @@ export function ProjectOverviewTab() {
     .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))
     .slice(0, 5);
 
-  const activityFeed = buildProjectActivityFeed(project, tasks, readProjectActivity(project.id)).slice(0, 5);
+  // Stage 5 (Real Activity): a small preview fetch, independent of
+  // ProjectActivityTab.tsx's own full fetch — same "each real-data
+  // consumer fetches its own slice" pattern Files.tsx/ProjectFilesTab.tsx
+  // already use. No dedicated loading/error UI here (this is a compact
+  // sidebar widget, not the authoritative view — "View all" links to the
+  // real tab, which does show one); a failed fetch just falls back to
+  // the existing empty state below.
+  const [activityRecords, setActivityRecords] = useState<ActivityEventRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !workspaceId) return null;
+        return listActivityRequest(workspaceId, projectId);
+      })
+      .then((records) => {
+        if (!cancelled) setActivityRecords(records ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setActivityRecords([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId, project.id]);
+
+  const events = useMemo<ActivityEvent[]>(
+    () =>
+      activityRecords.map((record) => ({
+        id: record.id,
+        projectId: record.projectId,
+        type: record.type,
+        text: record.text,
+        createdAt: new Date(record.createdAt).getTime(),
+      })),
+    [activityRecords]
+  );
+
+  const activityFeed = buildProjectActivityFeed(project, tasks, events).slice(0, 5);
+  // filesCount/discussionsCount still read the old localStorage helpers
+  // (readProjectFiles/readProjectDiscussions) — already-stale before
+  // Stage 5 (nothing writes to them since Files/Discussions moved to
+  // real APIs in earlier phases), flagged for the Final Global Audit
+  // rather than fixed here, since it's a pre-existing gap Stage 5 didn't
+  // cause (unlike activityFeed above, which Stage 5's own migration
+  // would otherwise have broken).
   const filesCount = readProjectFiles(project.id).length;
   const discussionsCount = readProjectDiscussions(project.id).length;
   const openCount = tasks.filter((task) => task.status !== "Completed").length;
   const commentsCount = tasks.reduce((sum, task) => sum + (task.comments?.length ?? 0), 0);
-
-  function updateProject(updater: (objectives: ProjectObjective[], milestones: ProjectMilestone[]) => Partial<{ objectives: ProjectObjective[]; milestones: ProjectMilestone[] }>) {
-    setProjects((current) =>
-      current.map((p) => (p.id === project.id ? { ...p, ...updater(p.objectives ?? [], p.milestones ?? []) } : p))
-    );
-  }
-
-  function toggleObjective(id: string) {
-    if (!canEdit) return;
-    updateProject((objectives) => ({
-      objectives: objectives.map((o) => (o.id === id ? { ...o, done: !o.done } : o)),
-    }));
-  }
-
-  function addObjective(text: string) {
-    if (!canEdit) return;
-    updateProject((objectives) => ({ objectives: [...objectives, { id: generateId("objective"), text, done: false }] }));
-  }
-
-  function removeObjective(id: string) {
-    if (!canEdit) return;
-    updateProject((objectives) => ({ objectives: objectives.filter((o) => o.id !== id) }));
-  }
-
-  function toggleMilestone(id: string) {
-    if (!canEdit) return;
-    updateProject((_objectives, milestones) => ({
-      milestones: milestones.map((m) => (m.id === id ? { ...m, done: !m.done } : m)),
-    }));
-  }
-
-  function addMilestone(title: string) {
-    if (!canEdit) return;
-    updateProject((_objectives, milestones) => ({ milestones: [...milestones, { id: generateId("milestone"), title, done: false }] }));
-  }
-
-  function removeMilestone(id: string) {
-    if (!canEdit) return;
-    updateProject((_objectives, milestones) => ({ milestones: milestones.filter((m) => m.id !== id) }));
-  }
 
   return (
     <div className="fade-in flex flex-col" style={{ gap: 16 }}>
@@ -369,8 +394,19 @@ export function ProjectOverviewTab() {
       <div className="grid grid-cols-1 xl:grid-cols-3" style={{ gap: 16 }}>
         {/* LEFT COLUMN */}
         <div className="flex flex-col" style={{ gap: 16, gridColumn: "span 2" }}>
-          <ObjectivesCard objectives={project.objectives ?? []} canEdit={canEdit} onToggle={toggleObjective} onAdd={addObjective} onRemove={removeObjective} />
-          <MilestonesCard milestones={project.milestones ?? []} canEdit={canEdit} onToggle={toggleMilestone} onAdd={addMilestone} onRemove={removeMilestone} />
+          {objectivesError && (
+            <p style={{ margin: 0, fontSize: 12, color: "#B3564B" }}>{objectivesError}</p>
+          )}
+          {objectivesLoading ? (
+            <div className="bg-card border-soft shadow-float fade-in" style={{ borderRadius: 20, padding: 20 }}>
+              <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading objectives and milestones…</p>
+            </div>
+          ) : (
+            <>
+              <ObjectivesCard objectives={objectives} canEdit={canEdit} onToggle={toggleObjective} onAdd={addObjective} onRemove={removeObjective} />
+              <MilestonesCard milestones={milestones} canEdit={canEdit} onToggle={toggleMilestone} onAdd={addMilestone} onRemove={removeMilestone} />
+            </>
+          )}
 
           {/* STATUS BREAKDOWN */}
           <div className="bg-card border-soft shadow-float fade-in" style={{ borderRadius: 20, padding: 20 }}>

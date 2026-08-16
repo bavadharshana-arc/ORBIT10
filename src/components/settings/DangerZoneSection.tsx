@@ -3,9 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 
 import { deleteAllOrbitData, resetWorkspaceData } from "../../data/settingsData";
-import { resolveCurrentMemberRole, canManageWorkspaceData } from "../../data/teamData";
-import { useAuth } from "../../context/AuthContext";
-import { canManageWorkspace, resolveEffectiveRole } from "../../lib/permissions";
+import { useWorkspaceRole, isWorkspaceOwner } from "../../hooks/useWorkspaceRole";
 import { ConfirmDangerModal } from "./ConfirmDangerModal";
 import { SectionCard } from "./shared";
 
@@ -15,12 +13,12 @@ export function DangerZoneSection() {
   const [activeAction, setActiveAction] = useState<DangerAction>(null);
   const navigate = useNavigate();
 
-  // These actions wipe every member's data, not just the acting user's
-  // own — Admin only, same threshold Team.tsx already uses for
-  // workspace-wide management.
-  const { role } = useAuth();
-  const canManage =
-    canManageWorkspaceData(resolveCurrentMemberRole(role)) && canManageWorkspace(resolveEffectiveRole(role));
+  // Stage 6 (Permissions Alignment): real WorkspaceRole, Owner only —
+  // matches DELETE /workspaces/:id's actual gate (requireWorkspaceRole
+  // ("OWNER"), workspace.routes.ts), the most-privileged real action
+  // this destructive a panel represents.
+  const workspaceRole = useWorkspaceRole();
+  const canManage = isWorkspaceOwner(workspaceRole);
 
   if (!canManage) return null;
 

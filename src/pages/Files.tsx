@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, DragEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -21,18 +21,43 @@ import {
   FolderOpen,
 } from "lucide-react";
 
-import { projects } from "../data/dashboardData";
-import { loadMembers, type Member } from "../data/teamData";
+import { loadMembers, getInitials } from "../data/teamData";
 import { useProjectContext } from "../context/projectContextValue";
-import { getPermissionForProjectName, canEditProjectContent, resolveCurrentActor } from "../data/workspaceData";
+import { useWorkspace } from "../context/workspaceContextValue";
+import {
+  getPermissionForProjectName,
+  canEditProjectContent,
+  resolveCurrentActor,
+  setSessionObjectUrl,
+  getSessionObjectUrl,
+  clearSessionObjectUrl,
+} from "../data/workspaceData";
 import { useAuth } from "../context/AuthContext";
 import { Avatar } from "../components/ui/Avatar";
+import { ApiError } from "../lib/api";
+import {
+  listFiles as listFilesRequest,
+  createFile as createFileRequest,
+  deleteFile as deleteFileRequest,
+  type ProjectFileApiRecord,
+} from "../lib/fileApi";
+import { listWorkspaceMembers, type WorkspaceMemberRecord } from "../lib/workspaceApi";
 
 /* ============================================================
    DATA MODEL
-   Flat, backend-ready shape — a real Files API would return
-   roughly this same record, so wiring one in later is a matter
-   of swapping buildMockFiles() for a fetch, not reshaping fields.
+   Flat, UI-shaped record built by flattening every accessible
+   project's real files (Stage 3 — Workspace-wide Files) into one
+   list — see mapApiRecord below. Backed by the same real,
+   metadata-only per-project file endpoint ProjectFilesTab.tsx uses
+   (lib/fileApi.ts, Phase 28); this page just aggregates it across
+   every project in the current workspace instead of scoping to one.
+
+   Phase 35: this page used to seed itself with buildMockFiles() —
+   9 fake files tagged to dashboardData.ts's hardcoded demo projects
+   ("Orbit Mobile App", etc.) and the mock team roster — shown to
+   every single user, new or old, on every load. Removed then; Stage
+   3 finishes the job by replacing the session-only local state those
+   fake files used to live in with the real backend list.
 ============================================================ */
 
 type FileKind = "document" | "image" | "pdf" | "spreadsheet" | "other";
@@ -52,8 +77,50 @@ interface FileRecord {
   kind: FileKind;
   sizeBytes: number;
   project: string;
+  /** Real project id — needed to scope the delete/create API calls, which are still per-project routes. */
+  projectId: string;
   uploadedBy: FileUploader;
   uploadedAt: string; // "YYYY-MM-DD"
+}
+
+const NEUTRAL_UPLOADER_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+
+/** Resolves a real uploaderId into a display FileUploader — same pattern as TaskContext.tsx's assignee resolution and ProjectFilesTab.tsx's resolveUploader. */
+function resolveUploader(
+  uploaderId: string | null,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallback: FileUploader,
+): FileUploader {
+  if (!uploaderId) return fallback;
+  const member = membersById.get(uploaderId);
+  if (!member) return fallback;
+  const name = member.user.name ?? member.user.email;
+  return {
+    id: uploaderId,
+    name,
+    initials: getInitials(name),
+    bg: member.user.avatarBg ?? NEUTRAL_UPLOADER_AVATAR.bg,
+    fg: member.user.avatarFg ?? NEUTRAL_UPLOADER_AVATAR.fg,
+  };
+}
+
+function mapApiRecord(
+  record: ProjectFileApiRecord,
+  projectName: string,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallbackUploader: FileUploader,
+): FileRecord {
+  return {
+    id: record.id,
+    name: record.name,
+    extension: record.extension,
+    kind: record.kind,
+    sizeBytes: record.sizeBytes,
+    project: projectName,
+    projectId: record.projectId,
+    uploadedBy: resolveUploader(record.uploaderId, membersById, fallbackUploader),
+    uploadedAt: record.createdAt.slice(0, 10),
+  };
 }
 
 const FILE_TYPE_META: Record<FileKind, { label: string; icon: LucideIcon }> = {
@@ -90,54 +157,12 @@ interface UploaderGroup {
   files: FileRecord[];
 }
 
-/* ============================================================
-   MOCK DATA
-   Reuses Orbit's existing projects (dashboardData) and team
-   roster (teamData) so the demo feels like part of the same
-   workspace rather than inventing a parallel cast.
-============================================================ */
-
-function daysAgo(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().split("T")[0];
-}
-
-function toUploader(member: Member | undefined): FileUploader {
-  if (!member) return { id: "unknown", name: "Unknown", initials: "?", bg: "#EEF2F6", fg: "#20242B" };
-  return { id: member.id, name: member.name, initials: member.initials, bg: member.bg, fg: member.fg };
-}
-
-function buildMockFiles(members: Member[]): FileRecord[] {
-  const projectNames = projects.map((project) => project.name);
-  const projectAt = (index: number) => projectNames[index % projectNames.length] ?? "Orbit";
-  const uploaderAt = (index: number) => toUploader(members[index % Math.max(members.length, 1)]);
-
-  const seed: Omit<FileRecord, "id">[] = [
-    { name: "Q3 product roadmap", extension: "pdf", kind: "pdf", sizeBytes: 2_400_000, project: projectAt(0), uploadedBy: uploaderAt(0), uploadedAt: daysAgo(1) },
-    { name: "Onboarding flow wireframes", extension: "png", kind: "image", sizeBytes: 1_850_000, project: projectAt(0), uploadedBy: uploaderAt(1), uploadedAt: daysAgo(2) },
-    { name: "Sprint retro notes", extension: "docx", kind: "document", sizeBytes: 84_000, project: projectAt(1), uploadedBy: uploaderAt(2), uploadedAt: daysAgo(3) },
-    { name: "Release checklist", extension: "xlsx", kind: "spreadsheet", sizeBytes: 62_000, project: projectAt(2), uploadedBy: uploaderAt(3), uploadedAt: daysAgo(4) },
-    { name: "Brand icon set", extension: "zip", kind: "other", sizeBytes: 12_400_000, project: projectAt(0), uploadedBy: uploaderAt(1), uploadedAt: daysAgo(5) },
-    { name: "API reference", extension: "pdf", kind: "pdf", sizeBytes: 960_000, project: projectAt(2), uploadedBy: uploaderAt(4), uploadedAt: daysAgo(6) },
-    { name: "Dashboard mockup v3", extension: "png", kind: "image", sizeBytes: 3_100_000, project: projectAt(1), uploadedBy: uploaderAt(0), uploadedAt: daysAgo(8) },
-    { name: "Customer interview summary", extension: "docx", kind: "document", sizeBytes: 47_000, project: projectAt(3), uploadedBy: uploaderAt(5), uploadedAt: daysAgo(10) },
-    { name: "Analytics event schema", extension: "xlsx", kind: "spreadsheet", sizeBytes: 38_000, project: projectAt(3), uploadedBy: uploaderAt(2), uploadedAt: daysAgo(12) },
-  ];
-
-  return seed.map((file, index) => ({ id: `file-${index + 1}`, ...file }));
-}
-
 function inferKind(extension: string): FileKind {
   if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(extension)) return "image";
   if (extension === "pdf") return "pdf";
   if (["xlsx", "xls", "csv"].includes(extension)) return "spreadsheet";
   if (["doc", "docx", "md", "txt", "rtf"].includes(extension)) return "document";
   return "other";
-}
-
-function generateFileId(): string {
-  return `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /* ============================================================
@@ -727,6 +752,14 @@ function NoResultsState({ onReset }: { onReset: () => void }) {
 
 /* ============================================================
    FILES PAGE
+
+   Workspace-wide file browser. Stage 3 (Workspace-wide Files):
+   flattens every accessible project's real, backend-persisted files
+   (the same per-project endpoint ProjectFilesTab.tsx uses, Phase 28
+   — fileApi.ts is scoped per-project, GET .../projects/:projectId/
+   files) into one list, the same aggregation pattern TaskContext.tsx
+   already uses for workspace-wide tasks. No new storage, no binary
+   upload — still metadata-only.
 ============================================================ */
 
 export default function Files() {
@@ -734,19 +767,29 @@ export default function Files() {
   const { user } = useAuth();
   const currentUser = useMemo(() => resolveCurrentActor(members, user), [members, user]);
   const { projects: liveProjects } = useProjectContext();
+  const { currentWorkspaceId } = useWorkspace();
 
   function canEditFile(file: FileRecord): boolean {
     return canEditProjectContent(getPermissionForProjectName(file.project, liveProjects, currentUser.initials));
   }
 
-  // New uploads always land under `projects[0]` (see processFiles below) —
-  // gate the upload affordances against that same target, resolved
-  // against the live project list so a permission change takes effect
-  // immediately rather than reading from the static seed snapshot.
-  const uploadTargetProject = projects[0]?.name ?? "Orbit";
-  const canUpload = canEditProjectContent(getPermissionForProjectName(uploadTargetProject, liveProjects, currentUser.initials));
+  // New uploads always land under the caller's first real project (see
+  // processFiles below) — gate the upload affordances against that same
+  // target, resolved against the live project list. Phase 35: this used
+  // to fall back to a hardcoded demo project name when there were no
+  // real projects, which (via getPermissionForProjectName's own no-match
+  // fallback, "Editor") let uploading appear enabled for an account with
+  // no real project to attach a file to. Explicitly false with zero real
+  // projects instead.
+  const uploadTargetProject = liveProjects[0];
+  const canUpload =
+    uploadTargetProject !== undefined &&
+    canEditProjectContent(getPermissionForProjectName(uploadTargetProject.name, liveProjects, currentUser.initials));
 
-  const [files, setFiles] = useState<FileRecord[]>(() => buildMockFiles(members));
+  const [files, setFiles] = useState<FileRecord[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -755,6 +798,62 @@ export default function Files() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Deliberate proxy for "did the accessible project set actually
+  // change" — same reasoning as TaskContext.tsx's identical
+  // projectIdsKey, so a re-render that produces a new `liveProjects`
+  // array reference (but the same ids) doesn't re-trigger the fetch.
+  const projectIdsKey = liveProjects.map((project) => project.id).join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !currentWorkspaceId || liveProjects.length === 0) return null;
+        setFilesLoading(true);
+        setFilesError(null);
+        return Promise.all([
+          listWorkspaceMembers(currentWorkspaceId),
+          Promise.all(liveProjects.map((project) => listFilesRequest(currentWorkspaceId, project.id))),
+        ]);
+      })
+      .then((result) => {
+        if (cancelled) return;
+        if (!currentWorkspaceId || liveProjects.length === 0 || !result) {
+          setFiles([]);
+          return;
+        }
+        const [workspaceMembers, perProjectFiles] = result;
+        const membersById = new Map(workspaceMembers.map((member) => [member.userId, member] as const));
+        const flattened: FileRecord[] = [];
+        perProjectFiles.forEach((records, index) => {
+          const project = liveProjects[index];
+          if (!project) return;
+          for (const record of records) {
+            flattened.push(mapApiRecord(record, project.name, membersById, currentUser));
+          }
+        });
+        setFiles(flattened);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFiles([]);
+        setFilesError(err instanceof ApiError ? err.message : "Couldn't load files. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setFilesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // `liveProjects` is intentionally omitted — projectIdsKey is the
+    // deliberate proxy for it (see comment above); `currentUser` is only
+    // a display fallback for a missing uploader match, not a refetch
+    // trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspaceId, projectIdsKey]);
 
   const filteredFiles = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -808,50 +907,89 @@ export default function Files() {
     });
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const target = files.find((file) => file.id === id);
-    if (!target || !canEditFile(target)) return;
+    if (!target || !canEditFile(target) || !currentWorkspaceId) return;
 
-    setFiles((current) => current.filter((file) => file.id !== id));
-    setOpenMenuId((current) => (current === id ? null : current));
+    setMutationError(null);
+    try {
+      await deleteFileRequest(currentWorkspaceId, target.projectId, id);
+      setFiles((current) => current.filter((file) => file.id !== id));
+      setOpenMenuId((current) => (current === id ? null : current));
+      clearSessionObjectUrl(id);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't delete the file. Try again.");
+    }
   }
 
-  // This page keeps only upload metadata (name/size/kind), not the real
-  // file content, so there's nothing real to serve — mirrors
-  // ProjectFilesTab's own fallback for a file with no stored object URL:
-  // a real, working download of a small placeholder bearing the file's
-  // actual name, instead of the button doing nothing at all.
+  // The backend still only keeps upload metadata (name/size/kind), never
+  // the real file bytes, so a fresh page load has nothing real to serve.
+  // Within the same browser session, though, an object URL captured at
+  // upload time (below) lets a just-uploaded file actually download —
+  // same session-object-url pattern as ProjectFilesTab.tsx. Falls back to
+  // a placeholder bearing the file's real name when there's no captured
+  // URL (e.g. after a reload), instead of the button doing nothing.
   function handleDownload(file: FileRecord) {
+    const objectUrl = getSessionObjectUrl(file.id);
+    const link = document.createElement("a");
+    if (objectUrl) {
+      link.href = objectUrl;
+      link.download = `${file.name}.${file.extension}`;
+      link.click();
+      return;
+    }
     const blob = new Blob(
       [`This is a demo placeholder for "${file.name}.${file.extension}" (${formatFileSize(file.sizeBytes)}).`],
       { type: "text/plain" }
     );
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
+    const fallbackUrl = URL.createObjectURL(blob);
+    link.href = fallbackUrl;
     link.download = `${file.name}.${file.extension}.txt`;
     link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(fallbackUrl), 1000);
   }
 
-  function processFiles(fileList: FileList) {
-    if (!canUpload) return;
+  async function processFiles(fileList: FileList) {
+    // canUpload being true guarantees uploadTargetProject is a real
+    // project (see its definition above) — reused directly rather than
+    // re-deriving it.
+    if (!canUpload || uploadTargetProject === undefined || !currentWorkspaceId) return;
 
-    const uploaded: FileRecord[] = Array.from(fileList).map((file) => {
+    setMutationError(null);
+
+    for (const file of Array.from(fileList)) {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      return {
-        id: generateFileId(),
-        name: file.name.replace(/\.[^.]+$/, ""),
-        extension,
-        kind: inferKind(extension),
-        sizeBytes: file.size,
-        project: projects[0]?.name ?? "Orbit",
-        uploadedBy: currentUser,
-        uploadedAt: new Date().toISOString().split("T")[0],
-      };
-    });
+      const name = file.name.replace(/\.[^.]+$/, "");
+      const kind = inferKind(extension);
 
-    setFiles((current) => [...uploaded, ...current]);
+      try {
+        const record = await createFileRequest(currentWorkspaceId, uploadTargetProject.id, {
+          name,
+          extension,
+          kind,
+          sizeBytes: file.size,
+          folder: "General",
+        });
+
+        setSessionObjectUrl(record.id, URL.createObjectURL(file));
+
+        const newFile: FileRecord = {
+          id: record.id,
+          name: record.name,
+          extension: record.extension,
+          kind: record.kind,
+          sizeBytes: record.sizeBytes,
+          project: uploadTargetProject.name,
+          projectId: record.projectId,
+          uploadedBy: currentUser,
+          uploadedAt: record.createdAt.slice(0, 10),
+        };
+
+        setFiles((current) => [newFile, ...current]);
+      } catch (error) {
+        setMutationError(error instanceof ApiError ? error.message : `Couldn't upload "${file.name}". Try again.`);
+      }
+    }
   }
 
   function handleFilesSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -883,6 +1021,12 @@ export default function Files() {
         </p>
       </div>
 
+      {mutationError && (
+        <p className="fade-in" style={{ margin: "0 0 14px", fontSize: 12.5, color: "#B3564B" }}>
+          {mutationError}
+        </p>
+      )}
+
       {canUpload && (
         <UploadDropzone
           isDragging={isDragging}
@@ -893,7 +1037,16 @@ export default function Files() {
         />
       )}
 
-      {!hasFiles ? (
+      {filesLoading ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 22, padding: "64px 24px", textAlign: "center" }}>
+          <p className="text-ink-3" style={{ fontSize: 13 }}>Loading files…</p>
+        </div>
+      ) : filesError ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 22, padding: "64px 24px", textAlign: "center" }}>
+          <p style={{ fontSize: 13.5, fontWeight: 600, color: "#B3564B", marginBottom: 6 }}>Couldn't load files</p>
+          <p className="text-ink-3" style={{ fontSize: 12.5, maxWidth: 320 }}>{filesError}</p>
+        </div>
+      ) : !hasFiles ? (
         <EmptyFilesState canUpload={canUpload} onUploadClick={() => fileInputRef.current?.click()} />
       ) : (
         <>

@@ -1,63 +1,27 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { AuthContextValue, AuthUser } from "../types/auth";
+import type { AuthContextValue, AuthRole, AuthUser } from "../types/auth";
+import { clearAuthToken, getAuthToken, setAuthToken } from "../lib/api";
+import { loginRequest, registerRequest, type LoginResult, type RegisteredUser } from "../lib/authApi";
+import { getMyProfile } from "../lib/userApi";
 
-
-const MOCK_USER: AuthUser = {
-  id: "user-1",
-  name: "Maya Chen",
-  email: "maya.chen@orbit.dev",
-  initials: "MC",
-  // Owner, not Admin — this MOCK_USER is the identity workspaceData.ts's
-  // resolveCurrentActor() and teamData.ts's resolveCurrentMemberRole()
-  // now resolve *from* (they take this AuthUser/role as input, rather
-  // than searching for "Maya Chen" themselves), so logging in should
-  // grant at least what the app already lets a signed-out visitor do
-  // (see permissions.ts's resolveEffectiveRole) rather than narrowing it.
-  role: "Owner",
+// These 5 emails must be real, registered users (seeded by
+// server/prisma/seed.ts's RBAC-demo block) with a shared demo password.
+// This map only decides which AuthRole a *verified* login resolves to —
+// the backend has no user-wide "role" column (AuthRole is a UI-gating
+// vocabulary separate from WorkspaceRole/ProjectRole). Any other real,
+// successfully-authenticated email resolves to "Owner".
+const DEMO_ROLE_BY_EMAIL: Record<string, AuthRole> = {
+  "owner@orbit.dev": "Owner",
+  "admin@orbit.dev": "Admin",
+  "pm@orbit.dev": "Project Manager",
+  "member@orbit.dev": "Member",
+  "viewer@orbit.dev": "Viewer",
 };
 
-/**
- * Dev/test-only mock accounts covering every AuthRole lib/permissions.ts
- * defines (Phase 7 RBAC). Signing in on the Login page with one of these
- * exact emails (any password — mock auth doesn't check it) signs in as
- * that role instead of the default Owner, so each of the 5 roles can be
- * exercised without a real backend or a role picker in the UI. Any other
- * email keeps the pre-existing behavior and signs in as MOCK_USER
- * (Owner) — this doesn't change what "maya.chen@orbit.dev" or the demo
- * login button do.
- */
-const MOCK_ROLE_ACCOUNTS: Record<string, AuthUser> = {
-  "owner@orbit.dev": MOCK_USER,
-  "admin@orbit.dev": {
-    id: "user-admin",
-    name: "Ari Admin",
-    email: "admin@orbit.dev",
-    initials: "AA",
-    role: "Admin",
-  },
-  "pm@orbit.dev": {
-    id: "user-pm",
-    name: "Pat Manager",
-    email: "pm@orbit.dev",
-    initials: "PM",
-    role: "Project Manager",
-  },
-  "member@orbit.dev": {
-    id: "user-member",
-    name: "Mo Member",
-    email: "member@orbit.dev",
-    initials: "MM",
-    role: "Member",
-  },
-  "viewer@orbit.dev": {
-    id: "user-viewer",
-    name: "Vic Viewer",
-    email: "viewer@orbit.dev",
-    initials: "VV",
-    role: "Viewer",
-  },
-};
+function resolveRole(email: string): AuthRole {
+  return DEMO_ROLE_BY_EMAIL[email.trim().toLowerCase()] ?? "Owner";
+}
 
 /** Derives display initials from a full name, e.g. "Jordan Avery" -> "JA". */
 function getInitials(name: string): string {
@@ -71,6 +35,17 @@ function getInitials(name: string): string {
   return initials || "?";
 }
 
+function toAuthUser(account: RegisteredUser): AuthUser {
+  const name = account.name ?? account.email;
+  return {
+    id: account.id,
+    name,
+    email: account.email,
+    initials: getInitials(name),
+    role: resolveRole(account.email),
+  };
+}
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 interface AuthProviderProps {
@@ -79,31 +54,51 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  function login(email: string, _password: string) {
-    const account = MOCK_ROLE_ACCOUNTS[email.trim().toLowerCase()];
-    setUser(account ?? MOCK_USER);
+  useEffect(() => {
+    let cancelled = false;
+    const token = getAuthToken();
+
+    (token ? getMyProfile() : Promise.resolve(null))
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        setUser(toAuthUser(profile));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearAuthToken();
+      })
+      .finally(() => {
+        if (!cancelled) setIsInitializing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function login(email: string, password: string): Promise<void> {
+    const result: LoginResult = await loginRequest(email, password);
+    setAuthToken(result.token);
+    setUser(toAuthUser(result));
   }
 
-  function register(name: string, email: string, _password: string) {
+  async function register(name: string, email: string, password: string): Promise<void> {
+    await registerRequest(name, email, password);
     
-
-    setUser({
-      id: `user-${Date.now()}`,
-      name,
-      email,
-      initials: getInitials(name),
-      role: "Member",
-    });
+    await login(email, password);
   }
 
   function logout() {
+    clearAuthToken();
     setUser(null);
   }
 
   const value: AuthContextValue = {
     user,
     isAuthenticated: user !== null,
+    isInitializing,
     role: user?.role ?? null,
     login,
     register,

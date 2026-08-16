@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import {
   Search,
   Send,
@@ -11,31 +11,42 @@ import {
   Megaphone,
   MessagesSquare,
   X,
+  Check,
   Reply as ReplyIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import type { Discussion, DiscussionType } from "../../types/workspace";
-import { loadMembers } from "../../data/teamData";
+import type { Discussion, DiscussionReply, DiscussionType } from "../../types/workspace";
+import type { WorkspaceActor } from "../../types/workspace";
+import { loadMembers, getInitials } from "../../data/teamData";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
-import { usePersistedState } from "../../hooks/usePersistedState";
+import { useWorkspace } from "../../context/workspaceContextValue";
 import {
-  discussionsKey,
-  seedDiscussionsForProject,
   getProjectActors,
   resolveCurrentActor,
-  generateId,
   formatRelativeTime,
+  formatFileSize,
   REACTION_EMOJIS,
   DISCUSSION_TYPE_LABEL,
-  appendProjectActivity,
-  appendProjectFile,
-  inferFileKind,
-  setSessionObjectUrl,
   canEditProjectContent,
   canCommentOnProject,
 } from "../../data/workspaceData";
+import { ApiError } from "../../lib/api";
+import { createActivityEvent } from "../../lib/activityApi";
+import {
+  listDiscussions as listDiscussionsRequest,
+  createDiscussion as createDiscussionRequest,
+  setPinned as setPinnedRequest,
+  addReply as addReplyRequest,
+  addReaction as addReactionRequest,
+  removeReaction as removeReactionRequest,
+  addAttachment as addAttachmentRequest,
+  type DiscussionRecord,
+  type DiscussionReplyRecord,
+} from "../../lib/discussionApi";
+import { listFiles as listFilesRequest, type ProjectFileApiRecord } from "../../lib/fileApi";
+import { listWorkspaceMembers, type WorkspaceMemberRecord } from "../../lib/workspaceApi";
 import { Avatar } from "../ui/Avatar";
 import { Pill } from "../ui/Pill";
 
@@ -67,24 +78,54 @@ function renderBody(text: string, actorNames: string[]) {
 
 /* ============================================================
    COMPOSER
+
+   Phase 33: the "Attach" button is wired for real. The backend only
+   supports linking an *already-uploaded* real ProjectFile to a
+   discussion (POST .../discussions/:id/attachments, Phase 16 Option
+   B) — there's no raw upload/storage to invent (Phase 15's approved
+   scope) — so "Attach" is a picker over the project's real Files tab
+   contents (fileApi.ts's listFiles) rather than a native file input.
+   The files chosen here are only *staged* locally (fileId/name/
+   sizeBytes, same Discussion["attachments"] shape as the read path);
+   the real POST .../attachments calls happen in
+   ProjectDiscussionsTab's handleSubmit, one per staged file, right
+   after the discussion itself is created — attaching needs a real
+   discussionId, which doesn't exist until that POST returns.
 ============================================================ */
 
 interface ComposerProps {
   actors: { id: string; name: string; initials: string; bg: string; fg?: string }[];
   currentActor: { id: string; name: string; initials: string; bg: string; fg?: string };
+  workspaceId: string;
   projectId: string;
   /** Editor+ only — Commenters can post/mention but not attach files (matches the Files tab's upload gate). */
   canAttach: boolean;
-  onSubmit: (discussion: Discussion) => void;
+  /**
+   * Phase 29: the real id/author/createdAt/reactions/replies can only
+   * come from the backend response after posting, so the composer hands
+   * up the raw form values rather than building a full Discussion
+   * itself — ProjectDiscussionsTab's handleSubmit does the real POST and
+   * assembles the final Discussion from the response.
+   */
+  onSubmit: (values: {
+    type: DiscussionType;
+    body: string;
+    mentions: string[];
+    attachments: Discussion["attachments"];
+  }) => void;
 }
 
-function Composer({ actors, currentActor, projectId, canAttach, onSubmit }: ComposerProps) {
+function Composer({ actors, currentActor, workspaceId, projectId, canAttach, onSubmit }: ComposerProps) {
   const [type, setType] = useState<DiscussionType>("update");
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<Discussion["attachments"]>([]);
   const [showMentions, setShowMentions] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isAttachOpen, setIsAttachOpen] = useState(false);
+  const [projectFiles, setProjectFiles] = useState<ProjectFileApiRecord[] | null>(null);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
 
   const mentionQuery = (() => {
     const match = body.match(/@([a-zA-Z]*)$/);
@@ -99,52 +140,58 @@ function Composer({ actors, currentActor, projectId, canAttach, onSubmit }: Comp
     setShowMentions(false);
   }
 
-  function handleAttach(event: ChangeEvent<HTMLInputElement>) {
-    if (!canAttach) return;
-    const selected = event.target.files;
-    if (!selected || selected.length === 0) return;
+  // Loads the project's real files the first time "Attach" opens —
+  // not eagerly on every Composer mount, since most posts never touch
+  // this button. Every setState below runs inside the promise chain,
+  // not synchronously in the effect body — same reasoning as every
+  // other Phase 24–29 fetch effect in this codebase.
+  useEffect(() => {
+    if (!isAttachOpen || projectFiles !== null) return;
 
-    const added: Discussion["attachments"] = Array.from(selected).map((file) => {
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const fileId = generateId("file");
-      setSessionObjectUrl(fileId, URL.createObjectURL(file));
-      appendProjectFile(projectId, {
-        id: fileId,
-        projectId,
-        name: file.name.replace(/\.[^.]+$/, ""),
-        extension,
-        kind: inferFileKind(extension),
-        sizeBytes: file.size,
-        folder: "Discussions",
-        uploadedBy: currentActor,
-        uploadedAt: Date.now(),
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return null;
+        setFilesLoading(true);
+        setFilesError(null);
+        return listFilesRequest(workspaceId, projectId);
+      })
+      .then((records) => {
+        if (cancelled || !records) return;
+        setProjectFiles(records);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFilesError(err instanceof ApiError ? err.message : "Couldn't load files.");
+      })
+      .finally(() => {
+        if (!cancelled) setFilesLoading(false);
       });
-      return { fileId, name: file.name, sizeBytes: file.size };
-    });
 
-    setAttachments((current) => [...current, ...added]);
-    event.target.value = "";
+    return () => {
+      cancelled = true;
+    };
+  }, [isAttachOpen, projectFiles, workspaceId, projectId]);
+
+  function toggleAttachment(file: ProjectFileApiRecord) {
+    setAttachments((current) => {
+      if (current.some((attachment) => attachment.fileId === file.id)) {
+        return current.filter((attachment) => attachment.fileId !== file.id);
+      }
+      return [...current, { fileId: file.id, name: `${file.name}.${file.extension}`, sizeBytes: file.sizeBytes }];
+    });
+  }
+
+  function removeStagedAttachment(fileId: string) {
+    setAttachments((current) => current.filter((attachment) => attachment.fileId !== fileId));
   }
 
   function submit() {
     const trimmed = body.trim();
     if (!trimmed) return;
 
-    const discussion: Discussion = {
-      id: generateId("discussion"),
-      projectId,
-      type,
-      body: trimmed,
-      author: currentActor,
-      createdAt: Date.now(),
-      pinned: false,
-      mentions,
-      attachments,
-      reactions: {},
-      replies: [],
-    };
-
-    onSubmit(discussion);
+    onSubmit({ type, body: trimmed, mentions, attachments });
     setBody("");
     setMentions([]);
     setAttachments([]);
@@ -223,7 +270,7 @@ function Composer({ actors, currentActor, projectId, canAttach, onSubmit }: Comp
                   <button
                     type="button"
                     aria-label="Remove attachment"
-                    onClick={() => setAttachments((current) => current.filter((a) => a.fileId !== attachment.fileId))}
+                    onClick={() => removeStagedAttachment(attachment.fileId)}
                     style={{ border: "none", background: "transparent", cursor: "pointer", display: "flex", color: "var(--text-3)" }}
                   >
                     <X size={10} />
@@ -235,17 +282,63 @@ function Composer({ actors, currentActor, projectId, canAttach, onSubmit }: Comp
 
           <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
             {canAttach ? (
-              <>
-                <input ref={fileInputRef} type="file" multiple onChange={handleAttach} style={{ display: "none" }} />
+              <div style={{ position: "relative" }}>
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => setIsAttachOpen((current) => !current)}
                   className="flex items-center"
                   style={{ gap: 6, border: "1px solid var(--border)", background: "var(--surface-2)", borderRadius: 10, padding: "7px 12px", fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", cursor: "pointer" }}
                 >
                   <Paperclip size={12} /> Attach
                 </button>
-              </>
+
+                {isAttachOpen && (
+                  <>
+                    <div onClick={() => setIsAttachOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                    <div
+                      className="bg-card border-soft shadow-float-lg fade-in-static"
+                      style={{ position: "absolute", bottom: "calc(100% + 8px)", left: 0, width: 260, borderRadius: 14, padding: 10, zIndex: 41 }}
+                    >
+                      <div style={{ padding: "2px 4px 8px", fontSize: 10.5, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                        Attach an existing file
+                      </div>
+
+                      <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                        {filesLoading ? (
+                          <p className="text-ink-3" style={{ fontSize: 11.5, padding: "10px 8px", textAlign: "center" }}>Loading files…</p>
+                        ) : filesError ? (
+                          <p style={{ fontSize: 11.5, padding: "10px 8px", textAlign: "center", color: "#B3564B" }}>{filesError}</p>
+                        ) : !projectFiles || projectFiles.length === 0 ? (
+                          <p className="text-ink-3" style={{ fontSize: 11.5, padding: "10px 8px", textAlign: "center" }}>
+                            No files yet — upload one in the Files tab first.
+                          </p>
+                        ) : (
+                          projectFiles.map((file) => {
+                            const selected = attachments.some((attachment) => attachment.fileId === file.id);
+                            return (
+                              <button
+                                key={file.id}
+                                type="button"
+                                onClick={() => toggleAttachment(file)}
+                                className="nav-item flex items-center"
+                                style={{ width: "100%", gap: 8, border: "none", background: "transparent", borderRadius: 8, padding: "7px 8px", cursor: "pointer", textAlign: "left" }}
+                              >
+                                <span style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                                  <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {file.name}.{file.extension}
+                                  </span>
+                                  <span className="text-ink-3" style={{ fontSize: 10.5 }}>{formatFileSize(file.sizeBytes)}</span>
+                                </span>
+                                {selected && <Check size={13} color="var(--blue-dark)" style={{ flexShrink: 0 }} />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
               <span />
             )}
@@ -418,6 +511,81 @@ function DiscussionCard({ discussion, actorNames, currentActor, canComment, canP
 }
 
 /* ============================================================
+   MAPPERS (Phase 29)
+
+   Real Discussion/Reply/Reaction records carry only authorId/userId —
+   resolved into WorkspaceActors via the real workspace members list,
+   same pattern as Comments (Phase 27) and Files (Phase 28). Reactions
+   arrive as a flat list (one row per user+emoji); the UI expects
+   emoji -> member ids, so they're folded here. Attachments render real
+   linked files when present — mapDiscussion() here handles the read
+   path (GET), the same shape handleSubmit() builds by hand for the
+   create path's response (Phase 33), since a freshly-posted discussion
+   doesn't get re-fetched just to pick up its own attachments.
+============================================================ */
+
+const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+
+function resolveActor(
+  id: string,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallback: WorkspaceActor,
+): WorkspaceActor {
+  const member = membersById.get(id);
+  if (!member) return fallback;
+  const name = member.user.name ?? member.user.email;
+  return {
+    id,
+    name,
+    initials: getInitials(name),
+    bg: member.user.avatarBg ?? NEUTRAL_AVATAR.bg,
+    fg: member.user.avatarFg ?? NEUTRAL_AVATAR.fg,
+  };
+}
+
+function mapReply(
+  record: DiscussionReplyRecord,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallback: WorkspaceActor,
+): DiscussionReply {
+  return {
+    id: record.id,
+    author: resolveActor(record.authorId, membersById, fallback),
+    text: record.text,
+    createdAt: new Date(record.createdAt).getTime(),
+  };
+}
+
+function mapDiscussion(
+  record: DiscussionRecord,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallback: WorkspaceActor,
+): Discussion {
+  const reactions: Record<string, string[]> = {};
+  for (const reaction of record.reactions) {
+    reactions[reaction.emoji] = [...(reactions[reaction.emoji] ?? []), reaction.userId];
+  }
+
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    type: record.type,
+    body: record.body,
+    author: resolveActor(record.authorId, membersById, fallback),
+    createdAt: new Date(record.createdAt).getTime(),
+    pinned: record.pinned,
+    mentions: record.mentions,
+    attachments: record.attachments.map((attachment) => ({
+      fileId: attachment.file.id,
+      name: `${attachment.file.name}.${attachment.file.extension}`,
+      sizeBytes: attachment.file.sizeBytes,
+    })),
+    reactions,
+    replies: record.replies.map((reply) => mapReply(reply, membersById, fallback)),
+  };
+}
+
+/* ============================================================
    DISCUSSIONS TAB
 ============================================================ */
 
@@ -433,46 +601,193 @@ export function ProjectDiscussionsTab() {
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
   const actorNames = useMemo(() => actors.map((a) => a.name), [actors]);
 
-  const [discussions, setDiscussions] = usePersistedState<Discussion[]>(discussionsKey(project.id), () => seedDiscussionsForProject(project, members));
+  const { currentWorkspaceId } = useWorkspace();
+
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [discussionsLoading, setDiscussionsLoading] = useState(false);
+  const [discussionsError, setDiscussionsError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
-  function handleSubmit(discussion: Discussion) {
-    if (!canComment) return;
-    setDiscussions((current) => [discussion, ...current]);
-    appendProjectActivity(project.id, {
-      type: "discussion_posted",
-      text: `${currentActor.name} posted ${discussion.type === "announcement" ? "an" : "a"} ${DISCUSSION_TYPE_LABEL[discussion.type].toLowerCase()}`,
-      actor: currentActor,
-    });
-  }
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      return;
+    }
 
-  function togglePin(id: string) {
-    if (!canEdit) return;
-    setDiscussions((current) => current.map((d) => (d.id === id ? { ...d, pinned: !d.pinned } : d)));
-  }
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
 
-  function toggleReaction(id: string, emoji: string) {
-    if (!canComment) return;
-    setDiscussions((current) =>
-      current.map((d) => {
-        if (d.id !== id) return d;
-        const reactors = d.reactions[emoji] ?? [];
-        const nextReactors = reactors.includes(currentActor.id) ? reactors.filter((r) => r !== currentActor.id) : [...reactors, currentActor.id];
-        return { ...d, reactions: { ...d.reactions, [emoji]: nextReactors } };
+    // Deferred into the promise chain — never synchronous in the effect
+    // body — same reasoning as every other Phase 24–28 fetch effect.
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return null;
+        setDiscussionsLoading(true);
+        setDiscussionsError(null);
+        return Promise.all([listWorkspaceMembers(workspaceId), listDiscussionsRequest(workspaceId, projectId)]);
       })
-    );
+      .then((result) => {
+        if (cancelled || !result) return;
+        const [workspaceMembers, records] = result;
+        const membersById = new Map(workspaceMembers.map((member) => [member.userId, member] as const));
+        setDiscussions(records.map((record) => mapDiscussion(record, membersById, currentActor)));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setDiscussions([]);
+        setDiscussionsError(err instanceof ApiError ? err.message : "Couldn't load discussions. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setDiscussionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // currentActor intentionally omitted — it's only a display fallback,
+    // not a refetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspaceId, project.id]);
+
+  async function handleSubmit(values: { type: DiscussionType; body: string; mentions: string[]; attachments: Discussion["attachments"] }) {
+    if (!canComment || !currentWorkspaceId) return;
+
+    setMutationError(null);
+
+    try {
+      const record = await createDiscussionRequest(currentWorkspaceId, project.id, {
+        type: values.type,
+        body: values.body,
+        mentions: values.mentions,
+      });
+
+      // Phase 33: attach() needs a real discussionId, which only exists
+      // once the create above returns — so the files staged in the
+      // Composer are attached here, one real POST per file, rather than
+      // bundled into the create body. Settled (not awaited as a single
+      // Promise.all) so one failed attachment can't take the rest down
+      // with it — the discussion itself already exists either way.
+      const settled = await Promise.allSettled(
+        values.attachments.map((attachment) =>
+          addAttachmentRequest(currentWorkspaceId, project.id, record.id, attachment.fileId),
+        ),
+      );
+
+      const attachedRecords = settled
+        .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof addAttachmentRequest>>> => result.status === "fulfilled")
+        .map((result) => result.value);
+      const failedCount = settled.length - attachedRecords.length;
+
+      const discussion: Discussion = {
+        id: record.id,
+        projectId: record.projectId,
+        type: record.type,
+        body: record.body,
+        author: currentActor,
+        createdAt: new Date(record.createdAt).getTime(),
+        pinned: record.pinned,
+        mentions: record.mentions,
+        attachments: attachedRecords.map((attachment) => ({
+          fileId: attachment.file.id,
+          name: `${attachment.file.name}.${attachment.file.extension}`,
+          sizeBytes: attachment.file.sizeBytes,
+        })),
+        reactions: {},
+        replies: [],
+      };
+
+      setDiscussions((current) => [discussion, ...current]);
+
+      if (currentWorkspaceId) {
+        // Best-effort, real activity log entry — failure here shouldn't
+        // undo or block the post that already succeeded above.
+        createActivityEvent(currentWorkspaceId, project.id, {
+          type: "discussion_posted",
+          text: `${currentActor.name} posted ${discussion.type === "announcement" ? "an" : "a"} ${DISCUSSION_TYPE_LABEL[discussion.type].toLowerCase()}`,
+          actorId: user?.id,
+        }).catch((err: unknown) => console.error("Couldn't log discussion-posted activity:", err));
+      }
+
+      if (failedCount > 0) {
+        setMutationError(
+          failedCount === 1
+            ? "Posted, but one attachment couldn't be linked. Try attaching it again from a new post."
+            : `Posted, but ${failedCount} attachments couldn't be linked. Try attaching them again from a new post.`,
+        );
+      }
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't post. Try again.");
+    }
   }
 
-  function addReply(id: string, text: string) {
-    if (!canComment) return;
-    setDiscussions((current) =>
-      current.map((d) =>
-        d.id === id
-          ? { ...d, replies: [...d.replies, { id: generateId("reply"), author: currentActor, text, createdAt: Date.now() }] }
-          : d
-      )
-    );
+  async function togglePin(id: string) {
+    if (!canEdit || !currentWorkspaceId) return;
+    const target = discussions.find((d) => d.id === id);
+    if (!target) return;
+
+    setMutationError(null);
+
+    try {
+      const record = await setPinnedRequest(currentWorkspaceId, project.id, id, !target.pinned);
+      setDiscussions((current) => current.map((d) => (d.id === id ? { ...d, pinned: record.pinned } : d)));
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't update the pin. Try again.");
+    }
+  }
+
+  async function toggleReaction(id: string, emoji: string) {
+    if (!canComment || !currentWorkspaceId) return;
+    const target = discussions.find((d) => d.id === id);
+    if (!target) return;
+
+    const alreadyReacted = (target.reactions[emoji] ?? []).includes(currentActor.id);
+
+    setMutationError(null);
+
+    try {
+      if (alreadyReacted) {
+        await removeReactionRequest(currentWorkspaceId, project.id, id, emoji);
+      } else {
+        await addReactionRequest(currentWorkspaceId, project.id, id, emoji);
+      }
+
+      setDiscussions((current) =>
+        current.map((d) => {
+          if (d.id !== id) return d;
+          const reactors = d.reactions[emoji] ?? [];
+          const nextReactors = alreadyReacted
+            ? reactors.filter((r) => r !== currentActor.id)
+            : [...reactors, currentActor.id];
+          return { ...d, reactions: { ...d.reactions, [emoji]: nextReactors } };
+        }),
+      );
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't update your reaction. Try again.");
+    }
+  }
+
+  async function addReply(id: string, text: string) {
+    if (!canComment || !currentWorkspaceId) return;
+
+    setMutationError(null);
+
+    try {
+      const record = await addReplyRequest(currentWorkspaceId, project.id, id, text);
+      const reply: DiscussionReply = {
+        id: record.id,
+        author: currentActor,
+        text: record.text,
+        createdAt: new Date(record.createdAt).getTime(),
+      };
+
+      setDiscussions((current) =>
+        current.map((d) => (d.id === id ? { ...d, replies: [...d.replies, reply] } : d)),
+      );
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't post your reply. Try again.");
+    }
   }
 
   const filtered = useMemo(() => {
@@ -496,6 +811,7 @@ export function ProjectDiscussionsTab() {
         <div>
           <h2 className="font-display" style={{ fontSize: 17, fontWeight: 560, color: "var(--text)", marginBottom: 4 }}>Discussions</h2>
           <p className="text-ink-2" style={{ fontSize: 12.5 }}>Project-wide updates, questions, and announcements — not tied to any single task.</p>
+          {mutationError && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#B3564B" }}>{mutationError}</p>}
         </div>
         <div className="bg-card border-soft flex items-center" style={{ gap: 8, padding: "9px 13px", borderRadius: 12, width: 240 }}>
           <Search size={14} strokeWidth={1.8} color="var(--text-3)" />
@@ -508,8 +824,15 @@ export function ProjectDiscussionsTab() {
         </div>
       </div>
 
-      {canComment && (
-        <Composer actors={actors} currentActor={currentActor} projectId={project.id} canAttach={canEdit} onSubmit={handleSubmit} />
+      {canComment && currentWorkspaceId && (
+        <Composer
+          actors={actors}
+          currentActor={currentActor}
+          workspaceId={currentWorkspaceId}
+          projectId={project.id}
+          canAttach={canEdit}
+          onSubmit={handleSubmit}
+        />
       )}
 
       <div className="flex items-center" style={{ gap: 4, flexWrap: "wrap", background: "var(--surface-2)", borderRadius: 12, padding: 4, width: "fit-content" }}>
@@ -539,7 +862,17 @@ export function ProjectDiscussionsTab() {
       </div>
 
       <div className="flex flex-col" style={{ gap: 12 }}>
-        {filtered.length === 0 ? (
+        {discussionsLoading ? (
+          <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+            <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading discussions…</p>
+          </div>
+        ) : discussionsError ? (
+          <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+            <MessagesSquare size={22} strokeWidth={1.6} color="var(--text-3)" />
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: "#B3564B" }}>Couldn't load discussions</p>
+            <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 300 }}>{discussionsError}</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
             <MessagesSquare size={22} strokeWidth={1.6} color="var(--text-3)" />
             <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>No discussions yet</p>

@@ -3,7 +3,7 @@ import { Info, Users, Archive, ArchiveRestore, Copy, TriangleAlert, Check, Trash
 
 import { loadMembers } from "../../data/teamData";
 import { PROJECT_COLORS, PROJECT_TAGS } from "../../data/projectData";
-import { matchMember, canManageProject } from "../../data/workspaceData";
+import { matchMember } from "../../data/workspaceData";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useProjectContext } from "../../context/projectContextValue";
 import { SectionCard, Field } from "../settings/shared";
@@ -13,8 +13,13 @@ import { Pill } from "../ui/Pill";
 import { ProjectAddMemberMenu } from "./ProjectAddMemberMenu";
 
 export function ProjectSettingsTab() {
-  const { project, isArchived, openEditDrawer, openDeleteModal, duplicateProject, archiveProject, permission } = useProjectWorkspace();
-  const canManage = canManageProject(permission);
+  const { project, isArchived, openEditDrawer, openDeleteModal, duplicateProject, archiveProject, canManageProjectEntity } = useProjectWorkspace();
+  // Stage 6 (Permissions Alignment): edit/duplicate/archive/delete are
+  // all project-*entity* actions — real WorkspaceRole-gated
+  // (requireWorkspaceRole("OWNER", "ADMIN"), project.routes.ts), not
+  // this project's ProjectRole. See ProjectWorkspace.tsx's doc comment
+  // on canManageProjectEntity.
+  const canManage = canManageProjectEntity;
   const { setProjects } = useProjectContext();
   const allMembers = useMemo(() => loadMembers(), []);
 

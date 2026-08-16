@@ -6,7 +6,8 @@ import { useTaskContext } from "../../context/taskContextValue";
 import { useNotificationContext } from "../../context/notificationContextValue";
 import { useTaskCommentHandlers } from "../../hooks/useTaskCommentHandlers";
 import { loadMembers } from "../../data/teamData";
-import { buildProjectAssigneeOptions, canEditProjectContent, canCommentOnProject, resolveCurrentActor } from "../../data/workspaceData";
+import { resolveCurrentActor } from "../../data/workspaceData";
+import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { useAuth } from "../../context/AuthContext";
 import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../../data/taskData";
@@ -15,6 +16,7 @@ import { Pill } from "../ui/Pill";
 import { AvatarStack } from "../ui/AvatarStack";
 import {
   TaskDetailsDrawer,
+  buildWorkspaceAssigneeOptions,
   generateId,
   getMembersForKeys,
   describeChanges,
@@ -34,16 +36,21 @@ export function ProjectCalendarTab() {
   // ProjectWorkspace from the shared TaskContext), and `setTasks` writes
   // straight back into that same context — so the drawer edits the one
   // real task list instead of a local copy.
-  const { projectTasks: tasks, project, permission } = useProjectWorkspace();
-  const { setTasks } = useTaskContext();
+  const { projectTasks: tasks, project } = useProjectWorkspace();
+  const { setTasks, updateTask, deleteTask, workspaceMembers } = useTaskContext();
   const { addNotification } = useNotificationContext();
-  const canEdit = canEditProjectContent(permission);
-  const canComment = canCommentOnProject(permission);
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — see
+  // ProjectListTab.tsx's identical constant for the full reasoning.
+  const workspaceRole = useWorkspaceRole();
+  const canEdit = isWorkspaceManager(workspaceRole);
+  const canComment = true;
 
   const members = useMemo(() => loadMembers(), []);
   const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
-  const assigneeOptions = useMemo(() => buildProjectAssigneeOptions(project, members), [project, members]);
+  // Stage 2 (Real Task Assignees) — real workspace roster; see
+  // ProjectWorkspace.tsx's identical constant for the full reasoning.
+  const assigneeOptions = useMemo(() => buildWorkspaceAssigneeOptions(workspaceMembers), [workspaceMembers]);
 
   const today = useMemo(() => new Date(), []);
   const [viewedMonth, setViewedMonth] = useState(today);
@@ -116,10 +123,23 @@ export function ProjectCalendarTab() {
       })
     );
 
+    // Persists the real-column subset for real (Phase 32; assigneeId
+    // Stage 2) — see TaskContext.tsx's updateTask. Only the first
+    // selected assignee is real.
+    void updateTask(selectedTask.id, {
+      title: values.title,
+      description: values.description,
+      status: values.status,
+      priority: values.priority,
+      dueDate: values.dueDate ?? null,
+      assigneeId: values.assigneeKeys[0] ?? null,
+    });
+
     notifyTaskAssigned(addNotification, {
       taskTitle: selectedTask.title,
       projectName: selectedTask.project,
-      assignedNames: changes.newlyAssigned,
+      assigneeId: values.assigneeKeys[0],
+      actorId: user?.id,
       actor: currentActor,
       actionHref: `/projects/${project.id}/calendar`,
     });
@@ -128,13 +148,15 @@ export function ProjectCalendarTab() {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
         projectName: selectedTask.project,
+        assigneeId: values.assigneeKeys[0],
+        actorId: user?.id,
         actor: currentActor,
         actionHref: `/projects/${project.id}/calendar`,
       });
     }
   }
 
-  const { handleAddComment, handleEditComment, handleDeleteComment } = useTaskCommentHandlers({
+  const { handleAddComment, handleEditComment, handleDeleteComment, commentsLoading, commentsError } = useTaskCommentHandlers({
     setTasks,
     selectedTask,
     currentActor,
@@ -146,8 +168,8 @@ export function ProjectCalendarTab() {
 
   function handleDeleteTask() {
     if (!selectedTask || !canEdit) return;
-    setTasks((currentTasks) => currentTasks.filter((task) => task.id !== selectedTask.id));
     setSelectedTaskId(null);
+    void deleteTask(selectedTask.id);
   }
 
   return (
@@ -241,6 +263,8 @@ export function ProjectCalendarTab() {
         onAddComment={handleAddComment}
         onEditComment={handleEditComment}
         onDeleteComment={handleDeleteComment}
+        commentsLoading={commentsLoading}
+        commentsError={commentsError}
         onDelete={handleDeleteTask}
       />
     </div>

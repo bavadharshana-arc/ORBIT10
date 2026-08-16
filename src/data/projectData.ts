@@ -1,28 +1,13 @@
 import type { Project, ProjectStatus, TeamMember } from "../types/dashboard";
-import { projects as seedProjects } from "./dashboardData";
 import { getDueGroup } from "./taskData";
 
-/* ============================================================
-   STATUS
-   Archived is always explicit (`status: "archived"`, set by the
-   Archive action). Active/Completed fall back to a progress-based
-   read when `status` isn't set, so the original seed projects (and
-   any project a user created before this field existed) still
-   classify correctly without needing a migration.
-============================================================ */
 
 export function getProjectStatus(project: Project): ProjectStatus {
   if (project.status) return project.status;
   return project.progress >= 100 ? "completed" : "active";
 }
 
-/*
- * Active projects due soon — due today, tomorrow, or later this week
- * — nearest deadline first. Mirrors getUpcomingTasks() in taskData.ts
- * (same getDueGroup buckets, same "not done yet" intent) so the
- * Dashboard's "Upcoming" widget can merge task and project deadlines
- * on one consistent definition of "upcoming".
- */
+
 export function getUpcomingProjects(
   projects: Project[],
   limit?: number
@@ -54,13 +39,6 @@ export const PROJECT_STATUS_META: Record<ProjectStatus, { label: string; color: 
   archived: { label: "Archived", color: "var(--text-3)" },
 };
 
-/* ============================================================
-   COLOR PALETTE
-   User-chosen per-project accent colors — a curated, muted set
-   in keeping with Orbit's soft aesthetic, kept as plain hex since
-   they're per-entity identity colors (like Avatar's bg/fg), not
-   app chrome, so they intentionally stay fixed across themes.
-============================================================ */
 
 export interface ProjectColorOption {
   name: string;
@@ -80,20 +58,12 @@ export const PROJECT_COLORS: ProjectColorOption[] = [
 
 export const DEFAULT_PROJECT_COLOR = PROJECT_COLORS[0].value;
 
-/* ============================================================
-   CATEGORY OPTIONS
-   Mirrors the "tag" values already used by the seed projects.
-============================================================ */
+
+
 
 export const PROJECT_TAGS: string[] = ["Product", "Design", "Engineering", "Marketing", "Ops"];
 
-/* ============================================================
-   DUE-DATE FORMATTING
-   Turns a real "YYYY-MM-DD" into the same kind of display string
-   the seed data already hardcodes (e.g. "Due in 5 days"), so
-   ProjectsWidget/Projects.tsx don't need to change how they render
-   `project.due`.
-============================================================ */
+
 
 export function formatProjectDue(dueDate: string): string {
   const [year, month, day] = dueDate.split("-").map(Number);
@@ -110,9 +80,7 @@ export function formatProjectDue(dueDate: string): string {
   return `Due in ${diffDays} days`;
 }
 
-/* ============================================================
-   CREATION
-============================================================ */
+
 
 export interface NewProjectInput {
   name: string;
@@ -124,20 +92,6 @@ export interface NewProjectInput {
   people: TeamMember[];
 }
 
-/**
- * Builds a brand-new Project from CreateProjectDrawer's create-mode
- * values, with the creator set as Owner in memberRoles. Without that, a
- * newly created project would have no Owner at all — getProjectPermission()
- * falls back to "Editor" for everyone — and since only an Owner can ever
- * grant Owner elsewhere (ProjectTeamTab's and ProjectSettingsTab's
- * permission controls are themselves Owner-gated), the project would be
- * permanently unmanageable by anyone, including its own creator.
- *
- * The single entry point every project-creation call site should use
- * (Projects.tsx and Dashboard's ProjectsWidget both call this) rather than
- * each building the Project object by hand — that duplication is exactly
- * how the missing Owner assignment happened in the first place.
- */
 export function buildNewProject(values: NewProjectInput, creatorInitials: string): Project {
   return {
     id: generateProjectId(),
@@ -155,52 +109,13 @@ export function buildNewProject(values: NewProjectInput, creatorInitials: string
   };
 }
 
-/* ============================================================
-   PERSISTENCE
-   Mirrors taskData.ts's loadTasks()/saveTasks() localStorage
-   pattern exactly, seeded from dashboardData.ts's static array.
-============================================================ */
 
-const PROJECT_STORAGE_KEY = "orbit-projects";
 
 export function generateProjectId(): string {
   return `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/**
- * Backfills a stable `id` onto any project cached before the field
- * existed, and immediately re-persists it — so the id stays the same
- * on every subsequent load instead of being regenerated (which would
- * break any /projects/:projectId link pointing at it).
- */
-export function loadProjects(): Project[] {
-  try {
-    const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
-    if (!stored) return seedProjects;
 
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return seedProjects;
-
-    let needsResave = false;
-    const normalized: Project[] = parsed.map((project: Partial<Project>) => {
-      if (project.id) return project as Project;
-      needsResave = true;
-      return { ...project, id: generateProjectId() } as Project;
-    });
-
-    if (needsResave) saveProjects(normalized);
-
-    return normalized;
-  } catch (error) {
-    console.error("Failed to load projects:", error);
-    return seedProjects;
-  }
-}
-
-export function saveProjects(projects: Project[]): void {
-  try {
-    localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projects));
-  } catch (error) {
-    console.error("Failed to save projects:", error);
-  }
-}
+// loadProjects/saveProjects (localStorage-backed mock project list) have
+// zero remaining callers — Project data is fully real via ProjectContext/
+// lib/projectApi.ts. Confirmed via grep before removal.

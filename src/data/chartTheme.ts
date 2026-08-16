@@ -1,15 +1,3 @@
-/* ============================================================
-   CHART THEME
-   Literal hex mirrors of the light/dark tokens in
-   styles/globals.css, for the SVG-attribute consumers (Recharts
-   marks, ProgressRing, raw lucide `color` props) that can't
-   reliably resolve CSS custom properties. Cards, text, and borders
-   should keep using var(--...) directly instead of this.
-
-   Extracted from Analytics.tsx so the project workspace's
-   Analytics tab renders with the exact same palette.
-============================================================ */
-
 export interface ThemeColors {
   surface: string;
   surface2: string;

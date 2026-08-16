@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../lib/api";
 
 /* The illustrated panel uses the actual reference/orbit-login.jpe artwork
    (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
@@ -27,10 +28,11 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { register } = useAuth();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!name.trim() || !email.trim()) {
@@ -48,14 +50,17 @@ export default function Register() {
       return;
     }
 
-    /*
-     * No backend exists yet — a valid, matching password is treated
-     * as a successful mock account creation. AuthContext's register()
-     * creates the account and signs the user straight in.
-     */
     setError(null);
-    register(name, email, password);
-    navigate("/");
+    setSubmitting(true);
+
+    try {
+      await register(name, email, password);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -184,8 +189,8 @@ export default function Register() {
 
               {error && <span style={{ fontSize: 11.5, color: "#B3564B" }}>{error}</span>}
 
-              <button type="submit" className="lift" style={primaryButtonStyle}>
-                Create account
+              <button type="submit" disabled={submitting} className="lift" style={primaryButtonStyle}>
+                {submitting ? "Creating account…" : "Create account"}
               </button>
             </form>
 

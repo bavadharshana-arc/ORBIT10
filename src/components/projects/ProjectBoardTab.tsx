@@ -61,11 +61,12 @@ function BoardCard({ task, index, canEdit }: { task: Task; index: number; canEdi
  * Status board for the project workspace. Drag-and-drop reuses the same
  * @hello-pangea/dnd setup as the main Kanban page, and writes through the
  * shared TaskContext so a status change made here shows up everywhere else
- * (Kanban, Tasks list, etc.) and persists via TaskContext's localStorage sync.
+ * (Kanban, Tasks list, etc.) and persists for real via TaskContext's
+ * updateTask() (Phase 32 — PATCH /tasks/:id, not just local state).
  */
 export function ProjectBoardTab() {
   const { projectTasks: tasks, permission } = useProjectWorkspace();
-  const { setTasks } = useTaskContext();
+  const { setTasks, updateTask } = useTaskContext();
   const canEdit = canEditProjectContent(permission);
 
   const handleDragEnd = (result: DropResult) => {
@@ -76,6 +77,11 @@ export function ProjectBoardTab() {
     }
 
     const newStatus = destination.droppableId as Status;
+    const draggedTask = tasks.find((task) => task.id === draggableId);
+
+    if (!draggedTask || draggedTask.status === newStatus) {
+      return;
+    }
 
     setTasks((currentTasks) =>
       currentTasks.map((task) => {
@@ -97,6 +103,8 @@ export function ProjectBoardTab() {
         };
       })
     );
+
+    void updateTask(draggableId, { status: newStatus });
   };
 
   return (

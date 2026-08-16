@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Search,
@@ -13,20 +13,14 @@ import {
 } from "lucide-react";
 
 import {
-  loadMembers,
-  saveMembers,
-  loadActivity,
-  saveActivity,
-  teams,
-  generateMemberId,
-  generateActivityId,
-  getAvatarColors,
-  getInitials,
-  canManageWorkspaceMembers,
-  resolveCurrentMemberRole,
-  type Member,
+  mapWorkspaceMemberToMember,
+  memberRoleToWorkspaceRole,
+  WORKSPACE_ROLE_GROUPS,
+  WORKSPACE_MEMBER_ROLE_OPTIONS,
   type MemberStatus,
+  type TeamActivityEntry,
 } from "../data/teamData";
+import { formatRelativeTime } from "../data/workspaceData";
 
 import { StatCard } from "../components/dashboard/StatCard";
 import { MemberCard } from "../components/team/MemberCard";
@@ -37,7 +31,21 @@ import { ActivityFeed } from "../components/team/ActivityFeed";
 import { useNotificationContext } from "../context/notificationContextValue";
 import { notifyMemberInvited } from "../data/systemNotifications";
 import { useAuth } from "../context/AuthContext";
-import { canManageUsers, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspace } from "../context/workspaceContextValue";
+import { ApiError } from "../lib/api";
+import {
+  listWorkspaceMembers,
+  addWorkspaceMember,
+  updateWorkspaceMemberRole,
+  removeWorkspaceMember,
+  type WorkspaceMemberRecord,
+  type WorkspaceRole,
+} from "../lib/workspaceApi";
+import {
+  listWorkspaceActivity,
+  createWorkspaceActivity,
+  type WorkspaceActivityEventRecord,
+} from "../lib/workspaceActivityApi";
 
 import {
   MemberDetailsDrawer,
@@ -159,29 +167,148 @@ function EmptyState({
 }
 
 /* ============================================================
+   Stage 1 — Real Team Roster
+
+   The additive "Workspace members (live)" read-only panel (Phase 21)
+   lived here — it's gone because it's now redundant: the primary
+   roster below *is* that same GET /api/workspaces/:id/members data,
+   full CRUD, no separate read-only echo needed.
+============================================================ */
+
+/* ============================================================
    TEAM PAGE
 ============================================================ */
 
 export default function Team() {
-  const [members, setMembers] = useState<Member[]>(
-    loadMembers
-  );
+  const { currentWorkspaceId, isLoading: workspaceLoading } = useWorkspace();
+  const { user } = useAuth();
 
-  const [activity, setActivity] = useState(
-    loadActivity
-  );
+  /* ============================================================
+     REAL WORKSPACE MEMBERS (Stage 1 — Real Team Roster)
+
+     Replaces the old loadMembers()/saveMembers() localStorage roster
+     as this page's source of truth. Fetched fresh on every workspace
+     switch (the currentWorkspaceId dependency below) so a previous
+     workspace's roster never lingers after switching — same
+     cancelled-flag + deferred-setState pattern every other real fetch
+     in this codebase uses (WorkspaceContext.tsx, TaskContext.tsx, ...).
+  ============================================================ */
+
+  const [memberRecords, setMemberRecords] = useState<WorkspaceMemberRecord[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  // Surfaces a failed invite/role-change/remove request — never a
+  // silent fallback to stale/local data.
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !currentWorkspaceId) {
+          return null;
+        }
+        setMembersLoading(true);
+        setMembersError(null);
+        return listWorkspaceMembers(currentWorkspaceId);
+      })
+      .then((fetched) => {
+        if (cancelled) return;
+
+        if (!currentWorkspaceId || !fetched) {
+          // Signed out, or this account currently has no workspace —
+          // reset so a previous workspace's roster never lingers.
+          setMemberRecords([]);
+          return;
+        }
+
+        setMemberRecords(fetched);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setMemberRecords([]);
+        setMembersError(err instanceof ApiError ? err.message : "Couldn't load workspace members. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setMembersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId]);
+
+  // Adapts real records onto the existing Member shape — every filter/
+  // sort/render below (MemberCard, MemberRow, TeamsPanel, ...) is
+  // completely unchanged; see mapWorkspaceMemberToMember's doc comment
+  // in teamData.ts for what's real vs. an honest placeholder.
+  const members = useMemo(() => memberRecords.map(mapWorkspaceMemberToMember), [memberRecords]);
+
+  const [activityRecords, setActivityRecords] = useState<WorkspaceActivityEventRecord[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !currentWorkspaceId) return null;
+        setActivityLoading(true);
+        setActivityError(null);
+        return listWorkspaceActivity(currentWorkspaceId);
+      })
+      .then((fetched) => {
+        if (cancelled) return;
+        if (!currentWorkspaceId || !fetched) {
+          setActivityRecords([]);
+          return;
+        }
+        setActivityRecords(fetched);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setActivityRecords([]);
+        setActivityError(err instanceof ApiError ? err.message : "Couldn't load activity. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId]);
+
+  // ActivityFeed matches entry.memberId against members[].id (the real
+  // WorkspaceMember *row* id — see mapWorkspaceMemberToMember), but the
+  // backend's WorkspaceActivityEvent.memberId is a real *userId* — cross-
+  // referenced here via memberRecords, same resolution TaskContext.tsx's
+  // resolveAssignee and every other real-actor mapping this session does.
+  const activity = useMemo<TeamActivityEntry[]>(() => {
+    const rowIdByUserId = new Map(memberRecords.map((record) => [record.userId, record.id] as const));
+    return activityRecords.map((record) => ({
+      id: record.id,
+      memberId: (record.member ? rowIdByUserId.get(record.member.id) : undefined) ?? record.member?.id ?? "",
+      text: record.text,
+      timestamp: formatRelativeTime(new Date(record.createdAt).getTime()),
+    }));
+  }, [activityRecords, memberRecords]);
 
   const { addNotification } = useNotificationContext();
 
   /*
-    Current user's workspace role — resolved from AuthContext's own
-    `role` (the authenticated identity, not a roster lookup) each
-    render, so if it ever changes it takes effect immediately without
-    a refresh.
+    The signed-in user's *real* WorkspaceRole in this workspace,
+    resolved from the roster just fetched — not a separate, decoupled
+    AuthRole lookup. This is what the backend actually checks
+    (requireWorkspaceRole("OWNER", "ADMIN")), so a control gated on it
+    here never offers an action the API would then reject with a 403.
   */
-  const { role: authRole } = useAuth();
-  const currentRole = resolveCurrentMemberRole(authRole);
-  const canManage = canManageWorkspaceMembers(currentRole) && canManageUsers(resolveEffectiveRole(authRole));
+  const myMembership = memberRecords.find((record) => record.userId === user?.id);
+  const myRealRole = (myMembership?.role as WorkspaceRole | undefined) ?? null;
+  const canManage = myRealRole === "OWNER" || myRealRole === "ADMIN";
+  const canGrantOwner = myRealRole === "OWNER";
 
   const [query, setQuery] = useState("");
 
@@ -221,44 +348,25 @@ export default function Team() {
     ) ?? null;
 
   /* ============================================================
-     PERSISTENCE
+     PERSISTENCE — real workspace activity now (Stage 5).
   ============================================================ */
 
-  function persistMembers(
-    updater: (
-      current: Member[]
-    ) => Member[]
-  ) {
-    setMembers((current) => {
-      const next = updater(current);
-
-      saveMembers(next);
-
-      return next;
-    });
-  }
-
+  // Best-effort: the member mutation this describes has already
+  // succeeded by the time this is called, so a logging failure here
+  // shouldn't surface as if the invite/role-change/remove itself failed.
   function persistActivity(
     entry: {
-      memberId: string;
+      /** Real userId this event is about (not a WorkspaceMember row id). */
+      userId: string;
       text: string;
     }
   ) {
-    setActivity((current) => {
-      const next = [
-        {
-          id: generateActivityId(),
-          memberId: entry.memberId,
-          text: entry.text,
-          timestamp: "Just now",
-        },
-        ...current,
-      ];
-
-      saveActivity(next);
-
-      return next;
-    });
+    if (!currentWorkspaceId) return;
+    createWorkspaceActivity(currentWorkspaceId, { text: entry.text, memberId: entry.userId })
+      .then((record) => {
+        setActivityRecords((current) => [record, ...current]);
+      })
+      .catch((err: unknown) => console.error("Couldn't log workspace activity:", err));
   }
 
   /* ============================================================
@@ -425,180 +533,132 @@ export default function Team() {
      HANDLERS
   ============================================================ */
 
-  function handleInvite(
+  /* ============================================================
+     MUTATIONS (Stage 1 — Real Team Roster)
+     Each calls the real API first and only updates memberRecords from
+     the successful response — never optimistically, never a silent
+     fallback if the request fails (see mutationError below).
+  ============================================================ */
+
+  async function handleInvite(
     values: InviteMemberValues
   ) {
-    if (!canManage) return;
+    if (!canManage || !currentWorkspaceId) return;
 
-    const colors =
-      getAvatarColors(
-        members.length
+    setMutationError(null);
+
+    try {
+      const record = await addWorkspaceMember(currentWorkspaceId, values.email, values.role);
+      setMemberRecords((current) => [...current, record]);
+
+      const added = mapWorkspaceMemberToMember(record);
+
+      persistActivity({
+        userId: record.userId,
+        text: `${added.name} was added to the workspace as ${added.role}`,
+      });
+
+      notifyMemberInvited(
+        addNotification,
+        {
+          department: added.department,
+          actionHref: "/team",
+          recipientId: record.userId,
+        }
       );
 
-    const newMember: Member = {
-      id: generateMemberId(),
-      name: values.name,
-      email: values.email,
-      jobTitle:
-        values.jobTitle ||
-        "New team member",
-      department:
-        values.department,
-      role: values.role,
-      status: "Invited",
-      location: "—",
-      phone: "—",
-      joinedDate:
-        new Date()
-          .toISOString()
-          .split("T")[0],
-      initials:
-        getInitials(
-          values.name
-        ),
-      bg: colors.bg,
-      fg: colors.fg,
-      tasksActive: 0,
-      tasksCompleted: 0,
-    };
-
-    persistMembers(
-      (current) => [
-        newMember,
-        ...current,
-      ]
-    );
-
-    persistActivity({
-      memberId: newMember.id,
-      text: `${newMember.name} was invited to ${newMember.department}`,
-    });
-
-    notifyMemberInvited(
-      addNotification,
-      {
-        memberName: newMember.name,
-        department: newMember.department,
-        actionHref: "/team",
-      }
-    );
-
-    setIsInviteOpen(false);
-
-    setStatusFilter("Invited");
-
-    setShowTeamsPanel(false);
+      setIsInviteOpen(false);
+      // Real members are never "Invited" (see mapWorkspaceMemberToMember)
+      // — clear filters instead of the old setStatusFilter("Invited"),
+      // which would otherwise hide the member that was just added.
+      clearFilters();
+      setShowTeamsPanel(false);
+    } catch (error) {
+      setMutationError(
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't add that member. Try again."
+      );
+    }
   }
 
-  function handleSaveMember(
+  async function handleSaveMember(
     values: MemberDetailsSaveValues
   ) {
-    if (!selectedMember || !canManage) {
+    if (!selectedMember || !canManage || !currentWorkspaceId) {
       return;
     }
 
-    const changes: string[] = [];
-
-    if (
-      values.status !==
-      selectedMember.status
-    ) {
-      changes.push(
-        `${values.name}'s status changed to ${values.status}`
-      );
+    // name/jobTitle/department/status/email/phone/location are
+    // disabled inputs for a real member (MemberDetailsDrawer's
+    // readOnlyProfileFields) — only role can actually differ here.
+    if (values.role === selectedMember.role) {
+      return;
     }
 
-    if (
-      values.department !==
-      selectedMember.department
-    ) {
-      changes.push(
-        `${values.name} moved to ${values.department}`
+    const nextRole = memberRoleToWorkspaceRole(values.role);
+
+    setMutationError(null);
+
+    try {
+      const record = await updateWorkspaceMemberRole(currentWorkspaceId, selectedMember.id, nextRole);
+      setMemberRecords((current) =>
+        current.map((candidate) => (candidate.id === selectedMember.id ? record : candidate))
+      );
+
+      persistActivity({
+        userId: record.userId,
+        text: `${selectedMember.name}'s role changed to ${mapWorkspaceMemberToMember(record).role}`,
+      });
+    } catch (error) {
+      setMutationError(
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't update that member's role. Try again."
       );
     }
-
-    if (
-      values.role !==
-      selectedMember.role
-    ) {
-      changes.push(
-        `${values.name}'s role changed to ${values.role}`
-      );
-    }
-
-    persistMembers(
-      (current) =>
-        current.map(
-          (member) =>
-            member.id ===
-            selectedMember.id
-              ? {
-                  ...member,
-                  name: values.name,
-                  jobTitle:
-                    values.jobTitle,
-                  department:
-                    values.department,
-                  role: values.role,
-                  status:
-                    values.status,
-                  email:
-                    values.email,
-                  phone:
-                    values.phone,
-                  location:
-                    values.location,
-                  initials:
-                    getInitials(
-                      values.name
-                    ),
-                }
-              : member
-        )
-    );
-
-    changes.forEach(
-      (text) =>
-        persistActivity({
-          memberId:
-            selectedMember.id,
-          text,
-        })
-    );
   }
 
-  function handleRemoveMember(
+  async function handleRemoveMember(
     id: string
   ) {
-    if (!canManage) return;
+    if (!canManage || !currentWorkspaceId) return;
 
     const member =
       members.find(
         (candidate) =>
           candidate.id === id
       );
+    // Resolved before removal — memberRecords no longer has this row
+    // once removeWorkspaceMember succeeds below.
+    const removedUserId = memberRecords.find((record) => record.id === id)?.userId;
 
-    persistMembers(
-      (current) =>
-        current.filter(
-          (candidate) =>
-            candidate.id !== id
-        )
-    );
+    setMutationError(null);
 
-    if (member) {
-      persistActivity({
-        memberId: member.id,
-        text: `${member.name} was removed from the workspace`,
-      });
+    try {
+      await removeWorkspaceMember(currentWorkspaceId, id);
+      setMemberRecords((current) => current.filter((candidate) => candidate.id !== id));
+
+      if (member && removedUserId) {
+        persistActivity({
+          userId: removedUserId,
+          text: `${member.name} was removed from the workspace`,
+        });
+      }
+
+      setSelectedMemberId(
+        (current) =>
+          current === id
+            ? null
+            : current
+      );
+    } catch (error) {
+      setMutationError(
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't remove that member. Try again."
+      );
     }
-
-    setSelectedMemberId(
-      (current) =>
-        current === id
-          ? null
-          : current
-    );
   }
 
   /* ============================================================
@@ -691,10 +751,16 @@ export default function Team() {
             }}
           >
             <UserPlus size={15} />
-            Invite Member
+            Add Member
           </button>
         )}
       </div>
+
+      {(membersError || mutationError) && (
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#B3564B" }}>
+          {membersError ?? mutationError}
+        </p>
+      )}
 
       {/* ======================================================
           STATS
@@ -753,9 +819,9 @@ export default function Team() {
         {/* TEAMS */}
 
         <StatCard
-          label="Teams"
+          label="Roles"
           value={String(
-            teams.length
+            WORKSPACE_ROLE_GROUPS.length
           )}
           icon={Users2}
           compact
@@ -800,7 +866,7 @@ export default function Team() {
           }}
         >
           <TeamsPanel
-            teams={teams}
+            teams={WORKSPACE_ROLE_GROUPS}
             members={members}
           />
         </div>
@@ -918,10 +984,10 @@ export default function Team() {
               style={filterStyle}
             >
               <option value="All">
-                All teams
+                All roles
               </option>
 
-              {teams.map(
+              {WORKSPACE_ROLE_GROUPS.map(
                 (team) => (
                   <option
                     key={
@@ -1146,7 +1212,12 @@ export default function Team() {
                 "#F7F8FA",
             }}
           >
-            {sortedMembers.length ===
+            {membersLoading || workspaceLoading ? (
+              <EmptyState
+                title="Loading members…"
+                message="Fetching your workspace's real roster."
+              />
+            ) : sortedMembers.length ===
             0 ? (
               <EmptyState
                 title={
@@ -1243,6 +1314,8 @@ export default function Team() {
           <ActivityFeed
             activity={activity}
             members={members}
+            isLoading={activityLoading}
+            error={activityError}
           />
         </div>
       </div>
@@ -1253,7 +1326,7 @@ export default function Team() {
 
       <InviteMemberDrawer
         isOpen={isInviteOpen}
-        teams={teams}
+        canGrantOwner={canGrantOwner}
         onClose={() =>
           setIsInviteOpen(false)
         }
@@ -1272,7 +1345,9 @@ export default function Team() {
           selectedMember !==
           null
         }
-        teams={teams}
+        teams={WORKSPACE_ROLE_GROUPS}
+        roleOptions={WORKSPACE_MEMBER_ROLE_OPTIONS}
+        readOnlyProfileFields
         canEdit={canManage}
         onClose={() =>
           setSelectedMemberId(

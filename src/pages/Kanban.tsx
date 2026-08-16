@@ -43,7 +43,7 @@ import {
 } from "../data/workspaceData";
 import { useProjectContext } from "../context/projectContextValue";
 import { useAuth } from "../context/AuthContext";
-import { canManageAssignments, canUpdateStatus, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 import {
   getDueGroup,
@@ -53,6 +53,9 @@ import {
 } from "../data/taskData";
 
 import { useTaskContext } from "../context/taskContextValue";
+import { useWorkspace } from "../context/workspaceContextValue";
+import { ApiError } from "../lib/api";
+import { createTask as createTaskRequest } from "../lib/taskApi";
 
 import {
   CreateTaskDrawer,
@@ -60,7 +63,7 @@ import {
 } from "../components/CreateTaskDrawer";
 
 import {
-  buildAssigneeOptions,
+  buildWorkspaceAssigneeOptions,
   generateId,
   getMembersForKeys,
 } from "../components/TaskDetailsDrawer";
@@ -168,8 +171,6 @@ const STATUS_OPTIONS: Status[] = [
     member: TeamMember;
   }
 */
-const ASSIGNEE_OPTIONS =
-  buildAssigneeOptions(team);
 
 /* ============================================================
    TEAM MEMBERS
@@ -780,26 +781,41 @@ export default function Kanban() {
   const {
     tasks,
     setTasks,
+    updateTask,
+    workspaceMembers,
   } = useTaskContext();
 
   const { projects } = useProjectContext();
+  const { currentWorkspaceId } = useWorkspace();
+
+  // Stage 2 (Real Task Assignees) — real workspace roster; see
+  // Tasks.tsx's identical constant for the full reasoning. Distinct
+  // from TEAM_MEMBERS/team above, which is this page's own unrelated
+  // mock "Product/Engineering/Design/Marketing Team" filter dropdown.
+  const ASSIGNEE_OPTIONS = useMemo(
+    () => buildWorkspaceAssigneeOptions(workspaceMembers),
+    [workspaceMembers]
+  );
+
+  // Phase 32: surfaces a failed create-task request — same convention
+  // ProjectWorkspace.tsx's own create-task flow already uses, rather
+  // than a silent fallback to a task that only exists locally.
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const members = useMemo(() => loadMembers(), []);
-  const { user, role: authRole } = useAuth();
+  const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
 
-  const effectiveAuthRole = resolveEffectiveRole(authRole);
-
-  /*
-    lib/permissions.ts layered on top of the existing project-level
-    checks above: creating a task always assigns it to a project and
-    (via CreateTaskDrawer's picker) to teammates, so it's gated by
-    the "assignments" resource — Project Manager and above. Dragging
-    a card between columns only changes its status, gated by the
-    lower "status" resource — Member and above.
-  */
-  const hasTaskCreateAccess = canManageAssignments(effectiveAuthRole);
-  const hasStatusAccess = canUpdateStatus(effectiveAuthRole);
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — task create
+  // and task update (which a drag-and-drop status change PATCHes) both
+  // hit the same real gate on the backend (requireWorkspaceRole("OWNER",
+  // "ADMIN"), task.routes.ts), so both checks below resolve to the same
+  // real threshold rather than lib/permissions.ts's separate "Project
+  // Manager and above" / "Member and above" mock tiers, which the real
+  // backend doesn't actually distinguish for tasks.
+  const workspaceRole = useWorkspaceRole();
+  const hasTaskCreateAccess = isWorkspaceManager(workspaceRole);
+  const hasStatusAccess = isWorkspaceManager(workspaceRole);
 
   /*
     Only projects the current user has Editor+ access to are offered
@@ -1068,6 +1084,10 @@ export default function Kanban() {
         destinationStatus
       );
 
+    if (draggedTask.status === newStatus) {
+      return;
+    }
+
     setTasks(
       (
         currentTasks
@@ -1115,16 +1135,24 @@ export default function Kanban() {
           }
         )
     );
+
+    // Persists the same status change for real (Phase 32) — the block
+    // above is the existing instant local echo (plus its Activity-tab
+    // log entry, which has no backend column to persist itself).
+    void updateTask(draggableId, { status: newStatus });
   };
 
   /* ==========================================================
      CREATE TASK
   ========================================================== */
 
-  const handleCreateTask = (
+  const handleCreateTask = async (
     values: CreateTaskValues
   ) => {
-    if (!editableProjectNames.includes(values.project) || !hasTaskCreateAccess) return;
+    if (!editableProjectNames.includes(values.project) || !hasTaskCreateAccess || !currentWorkspaceId) return;
+
+    const project = projects.find((candidate) => candidate.name === values.project);
+    if (!project) return;
 
     /*
       IMPORTANT:
@@ -1147,69 +1175,89 @@ export default function Kanban() {
       values.due.trim() ||
       "No due date";
 
-    const newTask: Task = {
-      id:
-        generateId("task"),
+    setMutationError(null);
 
-      title:
-        values.title,
+    try {
+      // Real create (Phase 32) — same endpoint/shape ProjectWorkspace.tsx's
+      // "New Task" already uses. Stage 2 (Real Task Assignees): the first
+      // selected assignee (a real userId — see ASSIGNEE_OPTIONS above) is
+      // sent as the real assigneeId; Task only has one real assignee
+      // column, so any additional local selections stay a display-only
+      // echo (selectedAssignees below), same as before.
+      const record = await createTaskRequest(currentWorkspaceId, project.id, {
+        title: values.title,
+        description: values.description || undefined,
+        status: values.status,
+        priority: values.priority,
+        dueDate: values.dueDate || null,
+        assigneeId: values.assigneeKeys[0] ?? null,
+      });
 
-      description:
-        values.description,
+      const newTask: Task = {
+        id: record.id,
 
-      project:
-        values.project,
+        title:
+          values.title,
 
-      due,
+        description:
+          values.description,
 
-      dueDate:
-        values.dueDate ||
-        undefined,
+        project:
+          values.project,
 
-      dueGroup:
-        getDueGroup(
-          values.dueDate
-        ),
+        due,
 
-      priority:
-        values.priority,
+        dueDate:
+          values.dueDate ||
+          undefined,
 
-      status:
-        values.status,
+        dueGroup:
+          getDueGroup(
+            values.dueDate
+          ),
 
-      assignees:
-        selectedAssignees,
+        priority:
+          values.priority,
 
-      comments: [],
+        status:
+          values.status,
 
-      activity: [
-        {
-          id:
-            generateId(
-              "activity"
-            ),
+        assignees:
+          selectedAssignees,
 
-          text:
-            "Task created",
+        comments: [],
 
-          timestamp:
-            "Just now",
-        },
-      ],
-    };
+        activity: [
+          {
+            id:
+              generateId(
+                "activity"
+              ),
 
-    setTasks(
-      (
-        currentTasks
-      ) => [
-        newTask,
-        ...currentTasks,
-      ]
-    );
+            text:
+              "Task created",
 
-    setIsCreateDrawerOpen(
-      false
-    );
+            timestamp:
+              "Just now",
+          },
+        ],
+      };
+
+      setTasks(
+        (
+          currentTasks
+        ) => [
+          newTask,
+          ...currentTasks,
+        ]
+      );
+
+      setIsCreateDrawerOpen(
+        false
+      );
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't create the task. Try again.");
+    }
   };
 
   /* ============================================================
@@ -1223,6 +1271,10 @@ export default function Kanban() {
         width: "100%",
       }}
     >
+      {mutationError && (
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#B3564B" }}>{mutationError}</p>
+      )}
+
       {/* HEADER */}
 
       <div

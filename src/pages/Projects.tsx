@@ -8,17 +8,24 @@ import { Pill } from "../components/ui/Pill";
 import { AvatarStack } from "../components/ui/AvatarStack";
 import { ProgressRing } from "../components/ui/ProgressRing";
 import { useProjectContext } from "../context/projectContextValue";
-import { formatProjectDue, generateProjectId, getProjectStatus, PROJECT_STATUS_META, buildNewProject } from "../data/projectData";
+import { useWorkspace } from "../context/workspaceContextValue";
+import { formatProjectDue, generateProjectId, getProjectStatus, PROJECT_STATUS_META } from "../data/projectData";
 import { useTaskContext } from "../context/taskContextValue";
+import { ApiError } from "../lib/api";
+import {
+  createProject as createProjectRequest,
+  updateProject as updateProjectRequest,
+  deleteProject as deleteProjectRequest,
+} from "../lib/projectApi";
 import { CreateProjectDrawer, type CreateProjectValues } from "../components/CreateProjectDrawer";
 import { ProjectActionsMenu } from "../components/projects/ProjectActionsMenu";
 import { ConfirmDangerModal } from "../components/settings/ConfirmDangerModal";
 import { loadMembers } from "../data/teamData";
-import { resolveCurrentActor, getProjectPermission, canManageProject } from "../data/workspaceData";
+import { resolveCurrentActor } from "../data/workspaceData";
 import { notifyProjectCreated } from "../data/systemNotifications";
 import { useNotificationContext } from "../context/notificationContextValue";
 import { useAuth } from "../context/AuthContext";
-import { canManageProjects, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 type ProjectFilter = "all" | "active" | "completed" | "archived";
 
@@ -157,60 +164,138 @@ export default function Projects() {
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  // Phase 25: surfaces a failed create/update/delete request — never a
+  // silent fallback to mock data (see the Phase 25/26 report).
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
-  const { tasks } = useTaskContext();
-  const { projects, setProjects } = useProjectContext();
+  const { tasks, setTasks, workspaceMembers } = useTaskContext();
+  const { projects, setProjects, isLoading: projectsLoading, error: projectsError } = useProjectContext();
+  const { currentWorkspaceId } = useWorkspace();
   const { addNotification } = useNotificationContext();
   const members = useMemo(() => loadMembers(), []);
-  const { user, role: authRole } = useAuth();
+  const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
-  const canManageProjectCard = (project: Project) => canManageProject(getProjectPermission(project, currentActor.initials));
 
-  // Project creation is the "projects" resource in lib/permissions.ts —
-  // Project Manager and above. Gates both the "New project" button below
-  // and handleCreateProject itself, so a hidden button can't be bypassed.
-  const canCreate = canManageProjects(resolveEffectiveRole(authRole));
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — matches
+  // project create/update/delete's actual gate (requireWorkspaceRole
+  // ("OWNER", "ADMIN"), project.routes.ts). Project entity CRUD is
+  // workspace-role-gated on the backend, not per-project-role-gated —
+  // both the create button and each project's own manage controls use
+  // the same single check, not a per-project mock permission lookup.
+  const workspaceRole = useWorkspaceRole();
+  const canCreate = isWorkspaceManager(workspaceRole);
+  const canManageProjectCard = (project: Project) => {
+    void project;
+    return canCreate;
+  };
 
-  function handleCreateProject(values: CreateProjectValues) {
-    if (!canCreate) return;
+  // Phase 25: creates the real backend Project (name/description are the
+  // only columns it has), then builds the frontend Project by merging
+  // that real record with the cosmetic fields (tag/color/dates/people)
+  // the backend doesn't store — same shape buildNewProject() used to
+  // build entirely locally, now anchored to a real id/createdAt instead
+  // of a client-generated one.
+  async function handleCreateProject(values: CreateProjectValues) {
+    if (!canCreate || !currentWorkspaceId) return;
 
-    const newProject = buildNewProject(values, currentActor.initials);
+    setMutationError(null);
 
-    setProjects((current) => [newProject, ...current]);
-    setIsCreateDrawerOpen(false);
+    try {
+      const record = await createProjectRequest(currentWorkspaceId, {
+        name: values.name,
+        description: values.description || undefined,
+      });
 
-    notifyProjectCreated(addNotification, {
-      projectName: newProject.name,
-      actor: currentActor,
-      actionHref: `/projects/${newProject.id}/overview`,
-    });
+      const newProject: Project = {
+        id: record.id,
+        name: record.name,
+        tag: values.tag,
+        progress: 0,
+        tasks: "0 / 0 tasks",
+        due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
+        people: values.people,
+        description: record.description ?? undefined,
+        color: values.color,
+        startDate: values.startDate || undefined,
+        dueDate: values.dueDate || undefined,
+        createdAt: record.createdAt,
+        memberRoles: { [currentActor.initials]: "Owner" },
+      };
+
+      setProjects((current) => [newProject, ...current]);
+      setIsCreateDrawerOpen(false);
+
+      notifyProjectCreated(addNotification, {
+        projectName: newProject.name,
+        actor: currentActor,
+        actionHref: `/projects/${newProject.id}/overview`,
+        // Broadcast to the rest of the workspace roster — the caller
+        // already knows they created it, so they're excluded.
+        recipientIds: workspaceMembers.map((member) => member.userId).filter((id) => id !== user?.id),
+      });
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't create the project. Try again.");
+    }
   }
 
-  function handleUpdateProject(values: CreateProjectValues) {
-    if (!editingProject || !canManageProjectCard(editingProject)) return;
+  async function handleUpdateProject(values: CreateProjectValues) {
+    if (!editingProject || !canManageProjectCard(editingProject) || !currentWorkspaceId) return;
 
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === editingProject.id
-          ? {
-              ...project,
-              name: values.name,
-              tag: values.tag,
-              description: values.description || undefined,
-              color: values.color,
-              startDate: values.startDate || undefined,
-              dueDate: values.dueDate || undefined,
-              due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-              people: values.people,
-            }
-          : project
-      )
-    );
-    setEditingProject(null);
+    setMutationError(null);
+
+    try {
+      // Only name/description are real columns — everything else below
+      // stays a local-only field on top of the real record, same as
+      // creation.
+      const record = await updateProjectRequest(currentWorkspaceId, editingProject.id, {
+        name: values.name,
+        description: values.description || undefined,
+      });
+
+      setProjects((current) =>
+        current.map((project) =>
+          project.id === editingProject.id
+            ? {
+                ...project,
+                name: record.name,
+                tag: values.tag,
+                description: record.description ?? undefined,
+                color: values.color,
+                startDate: values.startDate || undefined,
+                dueDate: values.dueDate || undefined,
+                due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
+                people: values.people,
+              }
+            : project
+        )
+      );
+
+      // Stabilization audit fix: Task.project stores the project *name*
+      // (Phase 26's join key, preserved across ~10 consumers on purpose —
+      // see TaskContext.tsx). A rename here would otherwise silently
+      // orphan that project's already-loaded tasks from every view that
+      // joins by name (Kanban, Tasks, Timeline, this page's own task
+      // counts) until a full reload. Keep them in sync locally, the same
+      // way the project rename itself is applied locally above.
+      if (record.name !== editingProject.name) {
+        const oldName = editingProject.name;
+        const newName = record.name;
+        setTasks((current) => current.map((task) => (task.project === oldName ? { ...task, project: newName } : task)));
+      }
+
+      setEditingProject(null);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't save the project. Try again.");
+    }
   }
 
+  // Duplicate/Archive stay local-only — neither has a backend equivalent
+  // (Project has no `status` column, and there's no duplicate endpoint),
+  // same as before Phase 25. A duplicated project's id is client-
+  // generated and won't resolve against the real API, which is an
+  // existing, unchanged limitation, not a new one.
   function handleDuplicateProject(project: Project) {
     if (!canManageProjectCard(project)) return;
     const duplicate: Project = {
@@ -220,8 +305,6 @@ export default function Projects() {
       progress: 0,
       tasks: "0 / 0 tasks",
       status: undefined,
-     
-      
       createdAt: new Date().toISOString(),
     };
 
@@ -237,10 +320,18 @@ export default function Projects() {
     setOpenMenuProjectId(null);
   }
 
-  function handleConfirmDelete() {
-    if (!deletingProject || !canManageProjectCard(deletingProject)) return;
-    setProjects((current) => current.filter((p) => p.id !== deletingProject.id));
-    setDeletingProject(null);
+  async function handleConfirmDelete() {
+    if (!deletingProject || !canManageProjectCard(deletingProject) || !currentWorkspaceId) return;
+
+    setMutationError(null);
+
+    try {
+      await deleteProjectRequest(currentWorkspaceId, deletingProject.id);
+      setProjects((current) => current.filter((p) => p.id !== deletingProject.id));
+      setDeletingProject(null);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't delete the project. Try again.");
+    }
   }
 
   const taskCountsByProject = useMemo(() => {
@@ -282,7 +373,16 @@ export default function Projects() {
 
   let emptyTitle = "No projects found";
   let emptyMessage = "Try a different search term.";
-  if (trimmedQuery === "" && filter === "completed" && filteredProjects.length === 0) {
+  if (projectsLoading) {
+    emptyTitle = "Loading projects…";
+    emptyMessage = "Fetching your workspace's projects.";
+  } else if (projectsError) {
+    emptyTitle = "Couldn't load projects";
+    emptyMessage = projectsError;
+  } else if (!currentWorkspaceId) {
+    emptyTitle = "No workspace found";
+    emptyMessage = "This account isn't a member of any workspace yet.";
+  } else if (trimmedQuery === "" && filter === "completed" && filteredProjects.length === 0) {
     emptyTitle = "Nothing completed yet";
     emptyMessage = "Projects will land here once they hit 100% progress.";
   } else if (trimmedQuery === "" && filter === "archived" && filteredProjects.length === 0) {
@@ -328,6 +428,10 @@ export default function Projects() {
           </button>
         )}
       </div>
+
+      {mutationError && (
+        <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#B3564B" }}>{mutationError}</p>
+      )}
 
       <div
         className="fade-in flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"

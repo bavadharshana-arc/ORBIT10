@@ -5,7 +5,7 @@ import type { NavItem } from "../../types/dashboard";
 import { SparkleMark } from "../doodles/SparkleMark";
 import { Avatar } from "../ui/Avatar";
 import { useAuth } from "../../context/AuthContext";
-import { hasRole, resolveEffectiveRole } from "../../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface SidebarProps {
@@ -55,11 +55,15 @@ const GUEST_ROLE = "Owner";
 
 export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
-  const { user, logout, role } = useAuth();
+  const { user, logout } = useAuth();
   const displayName = user?.name ?? GUEST_NAME;
   const displayInitials = user?.initials ?? GUEST_INITIALS;
   const displayRole = user?.role ?? GUEST_ROLE;
-  const canViewSettings = hasRole(resolveEffectiveRole(role), "Admin");
+  // Stage 6 (Permissions Alignment): real WorkspaceRole, not the mock
+  // AuthRole — see RequireRole.tsx's identical /settings route guard,
+  // which this just mirrors for the nav item itself.
+  const workspaceRole = useWorkspaceRole();
+  const canViewSettings = isWorkspaceManager(workspaceRole);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   function requestLogout() {

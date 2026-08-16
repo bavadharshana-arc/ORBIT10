@@ -1,18 +1,14 @@
 import { useState } from "react";
 import { Building2 } from "lucide-react";
 
-import { formatDatePreview, slugify, TIMEZONES, type DateFormat, type WeekStart, type WorkspaceSettings } from "../../data/settingsData";
-import { resolveCurrentMemberRole, canManageWorkspaceSettings } from "../../data/teamData";
-import { useAuth } from "../../context/AuthContext";
-import { canManageWorkspace, resolveEffectiveRole } from "../../lib/permissions";
+import { formatDatePreview, slugify, TIMEZONES, type DateFormat, type WeekStart } from "../../data/settingsData";
+import { useWorkspace } from "../../context/workspaceContextValue";
+import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
+import { ApiError } from "../../lib/api";
+import { updateWorkspaceSettings, type WorkspaceRecord } from "../../lib/workspaceApi";
 import { Field, SavedBadge, SectionCard } from "./shared";
 import { inputStyle, primaryButtonStyle, secondaryButtonStyle, selectStyle } from "./styles";
 import { useSavedFlash } from "./useSavedFlash";
-
-interface WorkspaceSectionProps {
-  workspace: WorkspaceSettings;
-  onSave: (workspace: WorkspaceSettings) => void;
-}
 
 const DATE_FORMATS: DateFormat[] = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
 
@@ -21,58 +17,147 @@ const WEEK_STARTS: { key: WeekStart; label: string }[] = [
   { key: "monday", label: "Monday" },
 ];
 
-export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
-  // Shared across everyone in Orbit (see the SectionCard description
-  // below) — Admin only, same threshold as the rest of workspace
-  // management (Team.tsx, Danger Zone).
-  const { role } = useAuth();
-  const canManage =
-    canManageWorkspaceSettings(resolveCurrentMemberRole(role)) && canManageWorkspace(resolveEffectiveRole(role));
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+const DEFAULT_DATE_FORMAT: DateFormat = "MM/DD/YYYY";
+const DEFAULT_WEEK_START: WeekStart = "monday";
 
-  const [workspaceName, setWorkspaceName] = useState(workspace.workspaceName);
-  const [workspaceSlug, setWorkspaceSlug] = useState(workspace.workspaceSlug);
-  const [timezone, setTimezone] = useState(workspace.timezone);
-  const [dateFormat, setDateFormat] = useState<DateFormat>(workspace.dateFormat);
-  const [weekStart, setWeekStart] = useState<WeekStart>(workspace.weekStart);
+/* ============================================================
+   FORM STATE
+
+   Mirrors ProfileSection.tsx's shape: form fields normalized away from
+   the API's nullable columns (an existing workspace has none of these
+   set until someone saves this tab) so inputs stay controlled.
+============================================================ */
+
+interface WorkspaceForm {
+  name: string;
+  slug: string;
+  timezone: string;
+  dateFormat: DateFormat;
+  weekStart: WeekStart;
+}
+
+function toForm(workspace: WorkspaceRecord): WorkspaceForm {
+  return {
+    name: workspace.name,
+    slug: workspace.slug ?? slugify(workspace.name),
+    timezone: workspace.timezone ?? DEFAULT_TIMEZONE,
+    dateFormat: (workspace.dateFormat as DateFormat | null) ?? DEFAULT_DATE_FORMAT,
+    weekStart: (workspace.weekStart as WeekStart | null) ?? DEFAULT_WEEK_START,
+  };
+}
+
+export function WorkspaceSection() {
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — matches
+  // PATCH /workspaces/:id's actual gate (requireWorkspaceRole("OWNER",
+  // "ADMIN"), workspace.routes.ts), same threshold Team.tsx's own real
+  // permission gating and the rest of workspace management already use.
+  const workspaceRole = useWorkspaceRole();
+  const canManage = isWorkspaceManager(workspaceRole);
+
+  // Phase 24: workspace discovery (GET /workspaces, take the current
+  // one) is no longer this component's own concern — WorkspaceProvider
+  // fetches it once for the whole app. This component keeps only its
+  // own editable draft (`form`), reset from `workspace` whenever the
+  // shared current workspace changes.
+  const { currentWorkspace: workspace, isLoading: loading, error: loadError, refetch } = useWorkspace();
+
+  const [form, setForm] = useState<WorkspaceForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Tracks which workspace `form` was last synced from, so it only
+  // resets when the *identity* of the current workspace changes (e.g.
+  // on load, or a future workspace switch) — not on every render. Set
+  // directly during render (React's documented pattern for "adjust
+  // state when a prop changes") rather than in a useEffect, since a
+  // useEffect here would set state synchronously on its very first run
+  // whenever `workspace` loads in, which is exactly what
+  // react-hooks/set-state-in-effect flags.
+  const [syncedWorkspaceId, setSyncedWorkspaceId] = useState<string | null>(null);
 
   const [saved, flashSaved] = useSavedFlash();
 
-  const isDirty =
-    workspaceName !== workspace.workspaceName ||
-    workspaceSlug !== workspace.workspaceSlug ||
-    timezone !== workspace.timezone ||
-    dateFormat !== workspace.dateFormat ||
-    weekStart !== workspace.weekStart;
-
-  function handleDiscard() {
-    setWorkspaceName(workspace.workspaceName);
-    setWorkspaceSlug(workspace.workspaceSlug);
-    setTimezone(workspace.timezone);
-    setDateFormat(workspace.dateFormat);
-    setWeekStart(workspace.weekStart);
+  if (workspace && workspace.id !== syncedWorkspaceId) {
+    setSyncedWorkspaceId(workspace.id);
+    setForm(toForm(workspace));
   }
 
-  function handleSave() {
-    if (!canManage) return;
+  if (loading) {
+    return (
+      <SectionCard icon={Building2} title="Workspace" description="Preferences shared across everyone in Orbit.">
+        <p style={{ margin: 0, fontSize: 12.5, color: "#98A2B3" }}>Loading workspace settings…</p>
+      </SectionCard>
+    );
+  }
 
-    const trimmedName = workspaceName.trim();
+  if (loadError || !workspace || !form) {
+    return (
+      <SectionCard icon={Building2} title="Workspace" description="Preferences shared across everyone in Orbit.">
+        <p style={{ margin: 0, fontSize: 12.5, color: "#B3564B" }}>
+          {loadError ?? "No workspace found for your account."}
+        </p>
+      </SectionCard>
+    );
+  }
 
+  const isDirty =
+    form.name !== workspace.name ||
+    form.slug !== (workspace.slug ?? slugify(workspace.name)) ||
+    form.timezone !== (workspace.timezone ?? DEFAULT_TIMEZONE) ||
+    form.dateFormat !== ((workspace.dateFormat as DateFormat | null) ?? DEFAULT_DATE_FORMAT) ||
+    form.weekStart !== ((workspace.weekStart as WeekStart | null) ?? DEFAULT_WEEK_START);
+
+  function set<K extends keyof WorkspaceForm>(key: K, value: WorkspaceForm[K]) {
+    setForm((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function handleDiscard() {
+    if (!workspace) return;
+    setForm(toForm(workspace));
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    if (!canManage || !workspace || !form) return;
+
+    const trimmedName = form.name.trim();
     if (!trimmedName) {
+      setSaveError("Workspace name can't be empty.");
       return;
     }
 
-    const slug = slugify(workspaceSlug) || slugify(trimmedName);
+    const slug = slugify(form.slug) || slugify(trimmedName);
 
-    onSave({
-      workspaceName: trimmedName,
-      workspaceSlug: slug,
-      timezone,
-      dateFormat,
-      weekStart,
-    });
+    setSaving(true);
+    setSaveError(null);
 
-    setWorkspaceSlug(slug);
-    flashSaved();
+    try {
+      const updated = await updateWorkspaceSettings(workspace.id, {
+        name: trimmedName,
+        slug,
+        timezone: form.timezone,
+        dateFormat: form.dateFormat,
+        weekStart: form.weekStart,
+      });
+      setForm(toForm(updated));
+      // Re-syncs the shared WorkspaceContext (name/slug/etc. just
+      // changed) so every other consumer — not just this form — reflects
+      // the save, rather than only this component's own local draft.
+      refetch();
+      flashSaved();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        setSaveError("You don't have permission to edit workspace settings.");
+      } else if (error instanceof ApiError && error.status === 401) {
+        setSaveError("Sign in to save workspace settings.");
+      } else if (error instanceof ApiError) {
+        setSaveError(error.message);
+      } else {
+        setSaveError("Couldn't save workspace settings. Try again.");
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -81,8 +166,8 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
           <Field label="Workspace name">
             <input
-              value={workspaceName}
-              onChange={(event) => setWorkspaceName(event.target.value)}
+              value={form.name}
+              onChange={(event) => set("name", event.target.value)}
               disabled={!canManage}
               style={inputStyle}
             />
@@ -92,9 +177,9 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
             <div className="flex items-center" style={{ ...inputStyle, gap: 4, padding: "9px 12px" }}>
               <span style={{ color: "#98A2B3" }}>orbit.io/</span>
               <input
-                value={workspaceSlug}
-                onChange={(event) => setWorkspaceSlug(event.target.value)}
-                onBlur={() => setWorkspaceSlug((current) => slugify(current))}
+                value={form.slug}
+                onChange={(event) => set("slug", event.target.value)}
+                onBlur={() => set("slug", slugify(form.slug))}
                 disabled={!canManage}
                 style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
               />
@@ -104,7 +189,12 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
           <Field label="Time zone">
-            <select value={timezone} onChange={(event) => setTimezone(event.target.value)} disabled={!canManage} style={selectStyle}>
+            <select
+              value={form.timezone}
+              onChange={(event) => set("timezone", event.target.value)}
+              disabled={!canManage}
+              style={selectStyle}
+            >
               {TIMEZONES.map((zone) => (
                 <option key={zone} value={zone}>
                   {zone.replace(/_/g, " ")}
@@ -113,10 +203,10 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
             </select>
           </Field>
 
-          <Field label="Date format" hint={`Preview: ${formatDatePreview(new Date(), dateFormat)}`}>
+          <Field label="Date format" hint={`Preview: ${formatDatePreview(new Date(), form.dateFormat)}`}>
             <select
-              value={dateFormat}
-              onChange={(event) => setDateFormat(event.target.value as DateFormat)}
+              value={form.dateFormat}
+              onChange={(event) => set("dateFormat", event.target.value as DateFormat)}
               disabled={!canManage}
               style={selectStyle}
             >
@@ -132,13 +222,13 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
         <Field label="Week starts on">
           <div className="flex items-center" style={{ gap: 2, background: "#EEF2F6", borderRadius: 10, padding: 3, width: "fit-content" }}>
             {WEEK_STARTS.map((option) => {
-              const active = weekStart === option.key;
+              const active = form.weekStart === option.key;
 
               return (
                 <button
                   key={option.key}
                   type="button"
-                  onClick={() => setWeekStart(option.key)}
+                  onClick={() => set("weekStart", option.key)}
                   disabled={!canManage}
                   style={{
                     border: "none",
@@ -160,13 +250,21 @@ export function WorkspaceSection({ workspace, onSave }: WorkspaceSectionProps) {
         </Field>
       </div>
 
+      {saveError && <p style={{ margin: "14px 0 0", fontSize: 11.5, color: "#B3564B" }}>{saveError}</p>}
+
       {canManage && (
         <div className="flex items-center" style={{ gap: 10, marginTop: 20 }}>
-          <button type="button" onClick={handleSave} className="lift" style={primaryButtonStyle}>
-            Save changes
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !isDirty}
+            className="lift"
+            style={{ ...primaryButtonStyle, opacity: saving || !isDirty ? 0.6 : 1, cursor: saving || !isDirty ? "default" : "pointer" }}
+          >
+            {saving ? "Saving…" : "Save changes"}
           </button>
 
-          {isDirty && (
+          {isDirty && !saving && (
             <button type="button" onClick={handleDiscard} style={secondaryButtonStyle}>
               Discard
             </button>

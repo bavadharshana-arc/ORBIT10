@@ -10,24 +10,16 @@ export type DateFormat = "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
 
 export type WeekStart = "sunday" | "monday";
 
-export interface ProfileSettings {
-  name: string;
-  email: string;
-  jobTitle: string;
-  phone: string;
-  location: string;
-  bio: string;
-  avatarBg: string;
-  avatarFg: string;
-}
-
-export interface WorkspaceSettings {
-  workspaceName: string;
-  workspaceSlug: string;
-  timezone: string;
-  dateFormat: DateFormat;
-  weekStart: WeekStart;
-}
+// Phase 18: profile is no longer part of OrbitSettings/localStorage —
+// Settings -> Profile now reads/writes GET/PATCH /api/users/me directly
+// (see lib/userApi.ts's UserProfile), so the API is the single source of
+// truth for it rather than competing with a cached localStorage copy.
+//
+// Phase 19: same for workspace — Settings -> Workspace now reads/writes
+// GET /api/workspaces + PATCH /api/workspaces/:id directly (see
+// lib/workspaceApi.ts's WorkspaceRecord). DateFormat/WeekStart and the
+// TIMEZONES/slugify/formatDatePreview helpers below stay here since
+// WorkspaceSection.tsx still needs them for its dropdowns/preview text.
 
 export interface NotificationSettings {
   emailTaskActivity: boolean;
@@ -60,8 +52,6 @@ export interface SecuritySettings {
 }
 
 export interface OrbitSettings {
-  profile: ProfileSettings;
-  workspace: WorkspaceSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
   security: SecuritySettings;
@@ -128,23 +118,6 @@ export const TIMEZONES: string[] = [
 ============================================================ */
 
 const DEFAULT_SETTINGS: OrbitSettings = {
-  profile: {
-    name: "Maya Chen",
-    email: "maya.chen@orbit.io",
-    jobTitle: "Product Lead",
-    phone: "+1 (415) 555-0142",
-    location: "San Francisco, CA",
-    bio: "Building calmer, more focused tools for product teams.",
-    avatarBg: "#AFC5DA",
-    avatarFg: "#20242B",
-  },
-  workspace: {
-    workspaceName: "Orbit",
-    workspaceSlug: "orbit-hq",
-    timezone: "America/Los_Angeles",
-    dateFormat: "MM/DD/YYYY",
-    weekStart: "monday",
-  },
   notifications: {
     emailTaskActivity: true,
     emailWeeklyDigest: true,
@@ -202,8 +175,6 @@ function mergeSettings(partial: Partial<OrbitSettings> | null): OrbitSettings {
   }
 
   return {
-    profile: { ...DEFAULT_SETTINGS.profile, ...partial.profile },
-    workspace: { ...DEFAULT_SETTINGS.workspace, ...partial.workspace },
     notifications: { ...DEFAULT_SETTINGS.notifications, ...partial.notifications },
     appearance: { ...DEFAULT_SETTINGS.appearance, ...partial.appearance },
     security: {
@@ -237,13 +208,7 @@ export function saveSettings(settings: OrbitSettings): void {
   }
 }
 
-/* ============================================================
-   APPEARANCE
-   Applied to <html> (not just this page) so the preference is
-   visible anywhere the design system relies on the CSS custom
-   properties defined in styles/globals.css, rather than being
-   scoped only to the Settings page itself.
-============================================================ */
+
 
 export function resolveTheme(theme: ThemePreference): "light" | "dark" {
   if (theme !== "system") {
@@ -266,9 +231,7 @@ export function applyAppearance(appearance: AppearanceSettings): void {
   document.documentElement.dataset.motion = appearance.reduceMotion ? "reduced" : "full";
 }
 
-/* ============================================================
-   DATE FORMATTING
-============================================================ */
+
 
 export function formatDatePreview(date: Date, format: DateFormat): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -299,9 +262,7 @@ export function formatSettingsDate(iso: string): string {
   });
 }
 
-/* ============================================================
-   WORKSPACE SLUG
-============================================================ */
+
 
 export function slugify(value: string): string {
   return value
@@ -311,9 +272,6 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/* ============================================================
-   DANGER ZONE
-============================================================ */
 
 const ORBIT_DATA_KEYS = ["orbit-team-members", "orbit-team-activity", "orbit-tasks"];
 

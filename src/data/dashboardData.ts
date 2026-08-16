@@ -16,9 +16,7 @@ import type {
   Project,
 } from "../types/dashboard";
 
-/* ============================================================
-   NAVIGATION
-============================================================ */
+
 
 export const navItems: NavItem[] = [
   {
@@ -59,9 +57,7 @@ export const navItems: NavItem[] = [
   },
 ];
 
-/* ============================================================
-   TEAM
-============================================================ */
+//team 
 
 export const team: Record<string, TeamMember> = {
   maya: {
@@ -95,9 +91,9 @@ export const team: Record<string, TeamMember> = {
   },
 };
 
-/* ============================================================
-   PROJECTS
-============================================================ */
+
+//PROJECTS
+
 
 export const projects: Project[] = [
   {
@@ -154,20 +150,4 @@ export const projects: Project[] = [
     ],
   },
 ];
-
-/*
- * The Dashboard's ActivityChart and UpcomingEvents widgets used to
- * render static demo fixtures (`weeklyActivity`, `events`) from here.
- * They now derive live data straight from TaskContext/ProjectContext
- * in src/pages/Dashboard.tsx (getTaskCompletedAt for the weekly
- * chart, getUpcomingTasks/getUpcomingProjects for the upcoming feed),
- * so no static fixture is needed.
- */
-
-/*
- * The Dashboard's MiniCalendar used to render a hardcoded "July 2026"
- * grid from here. It now builds a real grid for the actual current
- * month via `buildMonthGrid()` in `data/calendarGrid.ts`, so no static
- * fixture is needed.
- */
 

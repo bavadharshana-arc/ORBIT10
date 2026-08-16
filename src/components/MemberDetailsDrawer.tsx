@@ -1,19 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { X, Trash2, Mail, Phone, MapPin, CalendarDays } from "lucide-react";
 
 import type { Member, MemberRole, MemberStatus, OrbitTeam } from "../data/teamData";
-import { formatJoinedDate } from "../data/teamData";
-import { ROLES } from "../lib/permissions";
+import { formatJoinedDate, WORKSPACE_MEMBER_ROLE_OPTIONS } from "../data/teamData";
 
 import { Avatar } from "./ui/Avatar";
 import { Pill } from "./ui/Pill";
 import { STATUS_META } from "./team/statusMeta";
 
-/** MemberRole is AuthRole (see teamData.ts), so the option list comes
- *  straight from lib/permissions.ts's ROLES rather than being
- *  redeclared here — that stays the single source of truth for which
- *  5 roles exist and what order they display in. */
-const ROLE_OPTIONS: MemberRole[] = ROLES;
+/** Stage 6 (Permissions Alignment): the real 3-tier WorkspaceRole list
+ *  (teamData.ts), not the old mock 5-tier AuthRole one — this is only
+ *  ever a *default*, overridden by Team.tsx's real `roleOptions` prop
+ *  today, but a wrong default here would silently mislead any future
+ *  caller that didn't override it. */
+const ROLE_OPTIONS: MemberRole[] = WORKSPACE_MEMBER_ROLE_OPTIONS;
 const STATUS_OPTIONS: MemberStatus[] = ["Active", "Away", "Offline", "Invited"];
 
 export interface MemberDetailsSaveValues {
@@ -33,6 +33,21 @@ interface MemberDetailsDrawerProps {
   teams: OrbitTeam[];
   /** Whether the current user can edit fields, save, and remove this member. Defaults to true so any future call site outside a role-aware context keeps today's behavior. */
   canEdit?: boolean;
+  /** Role select's option list. Defaults to all 5 AuthRole values (this drawer's original scope); Team.tsx passes the 3 real WorkspaceRoles for real members, so a selection is always mappable back to something PATCH .../members/:memberId accepts. */
+  roleOptions?: MemberRole[];
+  /**
+   * Stage 1 (Real Team Roster): name/team/status/email/phone/location
+   * are another person's own profile fields — the real backend only
+   * lets an admin change a member's workspace *role* (PATCH
+   * .../members/:memberId) or remove them; there's no endpoint for one
+   * user to edit another's name/email/phone/location, and no backend
+   * concept of "team" or "status" at all. When true, those inputs stay
+   * disabled regardless of `canEdit` so the form never implies an edit
+   * will be saved when it can't be — only Role and Remove stay
+   * functional. Defaults to false so any future call site with real
+   * per-field write access keeps today's fully-editable behavior.
+   */
+  readOnlyProfileFields?: boolean;
   onClose: () => void;
   onSave: (values: MemberDetailsSaveValues) => void;
   onRemove: () => void;
@@ -43,6 +58,8 @@ export function MemberDetailsDrawer({
   isOpen,
   teams,
   canEdit = true,
+  roleOptions = ROLE_OPTIONS,
+  readOnlyProfileFields = false,
   onClose,
   onSave,
   onRemove,
@@ -56,20 +73,26 @@ export function MemberDetailsDrawer({
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
 
-  useEffect(() => {
-    if (!member) {
-      return;
+  // Reset the form fields the same render a different member is
+  // selected (or this one is re-opened), rather than one render later
+  // in an effect — matches CreateProjectDrawer.tsx's `wasOpen` pattern.
+  // Tracked by id (not the `member` object itself) so a re-fetch that
+  // returns a new object for the same real member doesn't wipe
+  // whatever the user is mid-typing.
+  const [syncedMemberId, setSyncedMemberId] = useState<string | null>(null);
+  if ((member?.id ?? null) !== syncedMemberId) {
+    setSyncedMemberId(member?.id ?? null);
+    if (member) {
+      setName(member.name);
+      setJobTitle(member.jobTitle);
+      setDepartment(member.department);
+      setRole(member.role);
+      setStatus(member.status);
+      setEmail(member.email);
+      setPhone(member.phone);
+      setLocation(member.location);
     }
-
-    setName(member.name);
-    setJobTitle(member.jobTitle);
-    setDepartment(member.department);
-    setRole(member.role);
-    setStatus(member.status);
-    setEmail(member.email);
-    setPhone(member.phone);
-    setLocation(member.location);
-  }, [member]);
+  }
 
   function handleSave() {
     if (!member || !canEdit) {
@@ -171,7 +194,7 @@ export function MemberDetailsDrawer({
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              disabled={!canEdit}
+              disabled={!canEdit || readOnlyProfileFields}
               className="font-display"
               style={{
                 fontSize: 19,
@@ -196,7 +219,7 @@ export function MemberDetailsDrawer({
             <label className="text-ink-3" style={{ fontSize: 11 }}>
               Job title
             </label>
-            <input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} disabled={!canEdit} style={inputStyle} />
+            <input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} disabled={!canEdit || readOnlyProfileFields} style={inputStyle} />
           </div>
 
           <div className="grid grid-cols-2" style={{ gap: 12 }}>
@@ -204,7 +227,7 @@ export function MemberDetailsDrawer({
               <label className="text-ink-3" style={{ fontSize: 11 }}>
                 Team
               </label>
-              <select value={department} onChange={(event) => setDepartment(event.target.value)} disabled={!canEdit} style={selectStyle}>
+              <select value={department} onChange={(event) => setDepartment(event.target.value)} disabled={!canEdit || readOnlyProfileFields} style={selectStyle}>
                 {teams.map((team) => (
                   <option key={team.id} value={team.name}>
                     {team.name}
@@ -223,7 +246,7 @@ export function MemberDetailsDrawer({
                 disabled={!canEdit}
                 style={selectStyle}
               >
-                {ROLE_OPTIONS.map((option) => (
+                {roleOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
@@ -239,7 +262,7 @@ export function MemberDetailsDrawer({
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value as MemberStatus)}
-              disabled={!canEdit}
+              disabled={!canEdit || readOnlyProfileFields}
               style={selectStyle}
             >
               {STATUS_OPTIONS.map((option) => (
@@ -259,7 +282,7 @@ export function MemberDetailsDrawer({
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                disabled={!canEdit}
+                disabled={!canEdit || readOnlyProfileFields}
                 style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
               />
             </div>
@@ -275,7 +298,7 @@ export function MemberDetailsDrawer({
                 <input
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
-                  disabled={!canEdit}
+                  disabled={!canEdit || readOnlyProfileFields}
                   style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
                 />
               </div>
@@ -290,7 +313,7 @@ export function MemberDetailsDrawer({
                 <input
                   value={location}
                   onChange={(event) => setLocation(event.target.value)}
-                  disabled={!canEdit}
+                  disabled={!canEdit || readOnlyProfileFields}
                   style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
                 />
               </div>

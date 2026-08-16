@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../lib/api";
 
 /* The illustrated panel uses the actual reference/orbit-login.jpe artwork
    (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
@@ -23,10 +24,11 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!email.trim() || !password.trim()) {
@@ -34,26 +36,37 @@ export default function Login() {
       return;
     }
 
-    /*
-     * No backend exists yet — AuthContext's login() accepts any
-     * non-empty email/password as a successful mock sign-in.
-     */
     setError(null);
-    login(email, password);
-    navigate("/");
+    setSubmitting(true);
+
+    try {
+      await login(email, password);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleDemoLogin() {
-    /*
-     * Same mock sign-in as handleSubmit above — AuthContext's login()
-     * always resolves to the Maya Chen Owner account regardless of the
-     * credentials passed in. Logging in here (not just navigating) is
-     * required so ProtectedRoute's isAuthenticated check lets the
-     * navigation to "/" (Dashboard) through instead of bouncing back
-     * to /login.
-     */
-    login("maya.chen@orbit.dev", "demo");
-    navigate("/");
+  async function handleDemoLogin() {
+    // "Maya Chen, Owner" — one of the 5 real, database-backed RBAC demo
+    // accounts seeded by server/prisma/seed.ts (see AuthContext.tsx's
+    // DEMO_ROLE_BY_EMAIL for the other 4). Logging in here (not just
+    // navigating) is required so ProtectedRoute's isAuthenticated check
+    // lets the navigation to "/" (Dashboard) through instead of bouncing
+    // back to /login.
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      await login("owner@orbit.dev", "demo1234");
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -180,8 +193,8 @@ export default function Login() {
 
               {error && <span style={{ fontSize: 11.5, color: "#B3564B" }}>{error}</span>}
 
-              <button type="submit" className="lift" style={primaryButtonStyle}>
-                Login
+              <button type="submit" disabled={submitting} className="lift" style={primaryButtonStyle}>
+                {submitting ? "Signing in…" : "Login"}
               </button>
             </form>
 
@@ -198,7 +211,7 @@ export default function Login() {
               <div style={{ height: 1, flex: 1, background: "var(--border)" }} />
             </div>
 
-            <button type="button" onClick={handleDemoLogin} style={secondaryButtonStyle}>
+            <button type="button" onClick={handleDemoLogin} disabled={submitting} style={secondaryButtonStyle}>
               Continue to demo workspace
             </button>
           </div>

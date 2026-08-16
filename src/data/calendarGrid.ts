@@ -1,9 +1,5 @@
 import type { Task } from "./taskData";
 
-/* ============================================================
-   MONTH GRID
-============================================================ */
-
 export interface MonthGrid {
   rows: number[][];
   outsideKeys: Set<string>;
@@ -12,12 +8,6 @@ export interface MonthGrid {
   month: number;
 }
 
-/**
- * Builds a real calendar grid for the given month, generalizing the
- * hardcoded demo `calendarRows` that used to live in dashboardData.ts
- * (which only covered "July 2026") so MiniCalendar can be reused
- * anywhere a real, current-dated month grid is needed.
- */
 export function buildMonthGrid(reference: Date): MonthGrid {
   const year = reference.getFullYear();
   const month = reference.getMonth();
@@ -59,7 +49,7 @@ export function buildMonthGrid(reference: Date): MonthGrid {
   };
 }
 
-/** Tasks in the given grid month, keyed by day-of-month. */
+
 export function groupTasksByDay(tasks: Task[], year: number, month: number): Map<number, Task[]> {
   const map = new Map<number, Task[]>();
 
@@ -76,7 +66,7 @@ export function groupTasksByDay(tasks: Task[], year: number, month: number): Map
   return map;
 }
 
-/** Formats a grid year/month (0-indexed) + day-of-month as the "YYYY-MM-DD" key used by `Task.dueDate`. */
+
 export function formatDateKey(year: number, month: number, day: number): string {
   const monthStr = String(month + 1).padStart(2, "0");
   const dayStr = String(day).padStart(2, "0");

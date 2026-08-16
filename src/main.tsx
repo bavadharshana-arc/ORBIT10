@@ -8,17 +8,20 @@ import { TaskProvider } from "./context/TaskContext";
 import { ProjectProvider } from "./context/ProjectContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { AuthProvider } from "./context/AuthContext";
+import { WorkspaceProvider } from "./context/WorkspaceContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>
-      <ProjectProvider>
-        <TaskProvider>
-          <NotificationProvider>
-            <RouterProvider router={router} />
-          </NotificationProvider>
-        </TaskProvider>
-      </ProjectProvider>
+      <WorkspaceProvider>
+        <ProjectProvider>
+          <TaskProvider>
+            <NotificationProvider>
+              <RouterProvider router={router} />
+            </NotificationProvider>
+          </TaskProvider>
+        </ProjectProvider>
+      </WorkspaceProvider>
     </AuthProvider>
   </StrictMode>,
 );

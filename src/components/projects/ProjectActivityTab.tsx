@@ -1,11 +1,45 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, History } from "lucide-react";
 
-import type { ActivityEventType, ActivityFeedItem } from "../../types/workspace";
+import type { ActivityEvent, ActivityEventType, ActivityFeedItem } from "../../types/workspace";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
-import { buildProjectActivityFeed, readProjectActivity, formatRelativeTime } from "../../data/workspaceData";
+import { useTaskContext } from "../../context/taskContextValue";
+import { useWorkspace } from "../../context/workspaceContextValue";
+import { buildProjectActivityFeed, formatRelativeTime } from "../../data/workspaceData";
+import { getInitials } from "../../data/teamData";
+import { ApiError } from "../../lib/api";
+import { listActivity as listActivityRequest, type ActivityEventRecord } from "../../lib/activityApi";
+import type { WorkspaceMemberRecord } from "../../lib/workspaceApi";
 import { Avatar } from "../ui/Avatar";
 import { ACTIVITY_META } from "./activityMeta";
+
+const NEUTRAL_ACTOR_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+
+/** Resolves a real ActivityEventRecord's embedded actor (id/name/email only — no color) into a full display ActivityEvent, cross-referencing the workspace roster for avatar color — same pattern as every other real-actor resolution this session (TaskContext.tsx's resolveAssignee, ProjectFilesTab.tsx's resolveUploader). */
+function mapActivityRecord(record: ActivityEventRecord, membersById: Map<string, WorkspaceMemberRecord>): ActivityEvent {
+  const actor = record.actor
+    ? (() => {
+        const name = record.actor!.name ?? record.actor!.email;
+        const member = membersById.get(record.actor!.id);
+        return {
+          id: record.actor!.id,
+          name,
+          initials: getInitials(name),
+          bg: member?.user.avatarBg ?? NEUTRAL_ACTOR_AVATAR.bg,
+          fg: member?.user.avatarFg ?? NEUTRAL_ACTOR_AVATAR.fg,
+        };
+      })()
+    : undefined;
+
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    type: record.type,
+    text: record.text,
+    createdAt: new Date(record.createdAt).getTime(),
+    actor,
+  };
+}
 
 /* ============================================================
    FILTER GROUPS
@@ -101,12 +135,60 @@ function ActivityRow({ item, isLast }: { item: ActivityFeedItem; isLast: boolean
 
 export function ProjectActivityTab() {
   const { project, projectTasks } = useProjectWorkspace();
+  const { currentWorkspaceId } = useWorkspace();
+  const { workspaceMembers } = useTaskContext();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
 
+  const [activityRecords, setActivityRecords] = useState<ActivityEventRecord[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
+
+    // Deferred into the promise chain — never synchronous in the effect
+    // body — same reasoning as every other real-data fetch effect this
+    // session.
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !workspaceId) return null;
+        setActivityLoading(true);
+        setActivityError(null);
+        return listActivityRequest(workspaceId, projectId);
+      })
+      .then((records) => {
+        if (cancelled) return;
+        if (!workspaceId || !records) {
+          setActivityRecords([]);
+          return;
+        }
+        setActivityRecords(records);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setActivityRecords([]);
+        setActivityError(err instanceof ApiError ? err.message : "Couldn't load activity. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId, project.id]);
+
+  const events = useMemo(() => {
+    const membersById = new Map(workspaceMembers.map((member) => [member.userId, member] as const));
+    return activityRecords.map((record) => mapActivityRecord(record, membersById));
+  }, [activityRecords, workspaceMembers]);
+
   const feed = useMemo(
-    () => buildProjectActivityFeed(project, projectTasks, readProjectActivity(project.id)),
-    [project, projectTasks]
+    () => buildProjectActivityFeed(project, projectTasks, events),
+    [project, projectTasks, events]
   );
 
   const activeTypes = FILTER_GROUPS.find((g) => g.key === filter)?.types ?? [];
@@ -167,7 +249,16 @@ export function ProjectActivityTab() {
       </div>
 
       <div className="bg-card border-soft shadow-float" style={{ borderRadius: 20, padding: "6px 20px" }}>
-        {groups.length === 0 ? (
+        {activityLoading ? (
+          <div className="flex flex-col items-center" style={{ padding: "48px 24px", textAlign: "center", gap: 10 }}>
+            <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading activity…</p>
+          </div>
+        ) : activityError ? (
+          <div className="flex flex-col items-center" style={{ padding: "48px 24px", textAlign: "center", gap: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#B3564B" }}>Couldn't load activity</p>
+            <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 300 }}>{activityError}</p>
+          </div>
+        ) : groups.length === 0 ? (
           <div className="flex flex-col items-center" style={{ padding: "48px 24px", textAlign: "center", gap: 10 }}>
             <History size={22} strokeWidth={1.6} color="var(--text-3)" />
             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No activity to show</p>

@@ -5,10 +5,12 @@ import type { Project } from "../types/dashboard";
 export interface ProjectContextValue {
   projects: Project[];
   setProjects: Dispatch<SetStateAction<Project[]>>;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
 }
 
 export const ProjectContext = createContext<ProjectContextValue | undefined>(undefined);
-
 export function useProjectContext(): ProjectContextValue {
   const context = useContext(ProjectContext);
   if (!context) {

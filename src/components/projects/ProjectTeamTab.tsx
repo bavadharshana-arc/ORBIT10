@@ -1,61 +1,63 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Users, Crown, Gauge, ChevronDown, X } from "lucide-react";
 
-import type { Project, ProjectPermission, TeamMember } from "../../types/dashboard";
-import { loadMembers, type Member } from "../../data/teamData";
+import { mapWorkspaceMemberToMember, getInitials, type Member } from "../../data/teamData";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
-import { useProjectContext } from "../../context/projectContextValue";
-import { matchMember, getProjectPermission, getMemberWorkload, PROJECT_PERMISSIONS, appendProjectActivity, canManageProject } from "../../data/workspaceData";
+import { useTaskContext } from "../../context/taskContextValue";
+import { useAuth } from "../../context/AuthContext";
+import { useWorkspace } from "../../context/workspaceContextValue";
+import { getMemberWorkload, PROJECT_PERMISSIONS, canManageProject } from "../../data/workspaceData";
+import { ApiError } from "../../lib/api";
+import {
+  listProjectMembers,
+  addProjectMember,
+  updateProjectMemberRole,
+  removeProjectMember,
+  type ProjectMemberRecord,
+  type ProjectMemberRole,
+} from "../../lib/projectMemberApi";
+import { createActivityEvent } from "../../lib/activityApi";
 import { StatCard } from "../dashboard/StatCard";
 import { Avatar } from "../ui/Avatar";
-import { Pill } from "../ui/Pill";
 import { ProjectAddMemberMenu } from "./ProjectAddMemberMenu";
 
-interface ResolvedTeamMember {
-  person: TeamMember;
-  matched?: Member;
-  name: string;
-  jobTitle: string;
-  department: string;
-  status: Member["status"];
-}
+/* ============================================================
+   PROJECT TEAM TAB (Stage 6 — Permissions Alignment)
 
-const STATUS_DOT: Record<Member["status"], string> = {
-  Active: "var(--blue-dark)",
-  Away: "#D8A657",
-  Offline: "var(--text-3)",
-  Invited: "var(--text-3)",
-};
+   Add/remove/role-change now call the real ProjectMember CRUD API
+   (projectMember.routes.ts — the write endpoints always existed on
+   the backend, just unwired on the frontend until now; see
+   lib/projectMemberApi.ts's doc comment). This roster is also what
+   ProjectWorkspace.tsx's real `permission` is derived from — without
+   a real way to add someone here, only each project's original
+   creator would ever have any project-level access.
+============================================================ */
 
 function MemberCard({
-  resolved,
-  permission,
-  workload,
+  record,
   canManage,
+  workload,
   onPermissionChange,
   onRemove,
 }: {
-  resolved: ResolvedTeamMember;
-  permission: ProjectPermission;
-  workload: { active: number; completed: number; total: number };
+  record: ProjectMemberRecord;
   canManage: boolean;
-  onPermissionChange: (permission: ProjectPermission) => void;
+  workload: { active: number; completed: number; total: number };
+  onPermissionChange: (role: ProjectMemberRole) => void;
   onRemove: () => void;
 }) {
-  const { person, name, jobTitle, department, status } = resolved;
+  const name = record.user.name ?? record.user.email;
+  const initials = getInitials(name);
   const activeShare = workload.total > 0 ? Math.round((workload.active / workload.total) * 100) : 0;
 
   return (
     <div className="bg-card border-soft shadow-float lift fade-in" style={{ borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
       <div className="flex items-start justify-between">
         <div className="flex items-center" style={{ gap: 11 }}>
-          <div style={{ position: "relative" }}>
-            <Avatar initials={person.initials} bg={person.bg} fg={person.fg} size={40} />
-            <span style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: STATUS_DOT[status], boxShadow: "0 0 0 2px var(--card)" }} />
-          </div>
+          <Avatar initials={initials} bg={record.user.avatarBg ?? undefined} fg={record.user.avatarFg ?? undefined} size={40} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-            <div className="text-ink-3" style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{jobTitle}</div>
+            <div className="text-ink-3" style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{record.user.jobTitle ?? record.user.email}</div>
           </div>
         </div>
         {canManage && (
@@ -64,8 +66,6 @@ function MemberCard({
           </button>
         )}
       </div>
-
-      <Pill tone="surface">{department}</Pill>
 
       <div>
         <div className="flex items-center justify-between" style={{ marginBottom: 5 }}>
@@ -79,8 +79,8 @@ function MemberCard({
 
       <div style={{ position: "relative" }}>
         <select
-          value={permission}
-          onChange={(event) => onPermissionChange(event.target.value as ProjectPermission)}
+          value={record.role}
+          onChange={(event) => onPermissionChange(event.target.value as ProjectMemberRole)}
           disabled={!canManage}
           style={{
             width: "100%",
@@ -108,78 +108,144 @@ function MemberCard({
 
 export function ProjectTeamTab() {
   const { project, projectTasks, permission } = useProjectWorkspace();
+  // Owner only — matches POST/PATCH/DELETE .../members's real gate
+  // (requireProjectRole("Owner"), projectMember.routes.ts).
   const canManage = canManageProject(permission);
-  const { setProjects } = useProjectContext();
-  const [allMembers] = useState<Member[]>(() => loadMembers());
+  const { currentWorkspaceId } = useWorkspace();
+  const { workspaceMembers } = useTaskContext();
+  const { user } = useAuth();
 
-  const resolved = useMemo<ResolvedTeamMember[]>(
-    () =>
-      project.people.map((person) => {
-        const matched = matchMember(person, allMembers);
-        return {
-          person,
-          matched,
-          name: matched?.name ?? person.initials,
-          jobTitle: matched?.jobTitle ?? "Team member",
-          department: matched?.department ?? "—",
-          status: matched?.status ?? "Active",
-        };
-      }),
-    [project.people, allMembers]
-  );
+  const [memberRecords, setMemberRecords] = useState<ProjectMemberRecord[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const candidates = useMemo(
-    () => allMembers.filter((member) => !project.people.some((person) => person.initials === member.initials && person.bg === member.bg)),
-    [allMembers, project.people]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  function persist(updater: (current: Project) => Partial<Project>) {
-    setProjects((current) => current.map((p) => (p.id === project.id ? { ...p, ...updater(p) } : p)));
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !currentWorkspaceId) return null;
+        setMembersLoading(true);
+        setMembersError(null);
+        return listProjectMembers(currentWorkspaceId, project.id);
+      })
+      .then((fetched) => {
+        if (cancelled) return;
+        if (!currentWorkspaceId || !fetched) {
+          setMemberRecords([]);
+          return;
+        }
+        setMemberRecords(fetched);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setMemberRecords([]);
+        setMembersError(err instanceof ApiError ? err.message : "Couldn't load project members. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setMembersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId, project.id]);
+
+  // Real workspace members not already on this project — offered as
+  // add-candidates. mapWorkspaceMemberToMember reused unchanged so
+  // ProjectAddMemberMenu (its existing Member[] prop shape) needs no
+  // changes of its own.
+  const candidates = useMemo<Member[]>(() => {
+    const onProjectUserIds = new Set(memberRecords.map((record) => record.userId));
+    return workspaceMembers.filter((member) => !onProjectUserIds.has(member.userId)).map(mapWorkspaceMemberToMember);
+  }, [workspaceMembers, memberRecords]);
+
+  function logActivity(type: "member_added" | "member_removed", text: string) {
+    if (!currentWorkspaceId) return;
+    // Best-effort — the membership change already succeeded by the time
+    // this is called, so a logging failure shouldn't surface as if it
+    // failed too.
+    createActivityEvent(currentWorkspaceId, project.id, { type, text, actorId: user?.id }).catch((err: unknown) =>
+      console.error("Couldn't log project activity:", err),
+    );
   }
 
-  function handleAdd(member: Member) {
-    if (!canManage) return;
-    persist((p) => ({ people: [...p.people, { initials: member.initials, bg: member.bg, fg: member.fg }] }));
-    appendProjectActivity(project.id, { type: "member_added", text: `${member.name} was added to the project` });
+  async function handleAdd(candidate: Member) {
+    if (!canManage || !currentWorkspaceId) return;
+    // candidate.id is the WorkspaceMember row id (mapWorkspaceMemberToMember)
+    // — resolve it back to the real userId addProjectMember needs.
+    const workspaceMember = workspaceMembers.find((member) => member.id === candidate.id);
+    if (!workspaceMember) return;
+
+    setMutationError(null);
+    try {
+      const record = await addProjectMember(currentWorkspaceId, project.id, workspaceMember.userId, "Viewer");
+      setMemberRecords((current) => [...current, record]);
+      logActivity("member_added", `${candidate.name} was added to the project`);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't add that member. Try again.");
+    }
   }
 
-  function handleRemove(target: ResolvedTeamMember) {
-    if (!canManage) return;
-    persist((p) => {
-      const memberRoles = { ...p.memberRoles };
-      delete memberRoles[target.person.initials];
-      return { people: p.people.filter((person) => person !== target.person), memberRoles };
-    });
-    appendProjectActivity(project.id, { type: "member_removed", text: `${target.name} was removed from the project` });
+  async function handleRemove(record: ProjectMemberRecord) {
+    if (!canManage || !currentWorkspaceId) return;
+
+    setMutationError(null);
+    try {
+      await removeProjectMember(currentWorkspaceId, project.id, record.id);
+      setMemberRecords((current) => current.filter((candidate) => candidate.id !== record.id));
+      logActivity("member_removed", `${record.user.name ?? record.user.email} was removed from the project`);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't remove that member. Try again.");
+    }
   }
 
-  function handlePermissionChange(initials: string, newPermission: ProjectPermission) {
-    if (!canManage) return;
-    persist((p) => ({ memberRoles: { ...p.memberRoles, [initials]: newPermission } }));
+  async function handlePermissionChange(record: ProjectMemberRecord, role: ProjectMemberRole) {
+    if (!canManage || !currentWorkspaceId) return;
+
+    setMutationError(null);
+    try {
+      const updated = await updateProjectMemberRole(currentWorkspaceId, project.id, record.id, role);
+      setMemberRecords((current) => current.map((candidate) => (candidate.id === record.id ? updated : candidate)));
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't update that member's role. Try again.");
+    }
   }
 
-  const ownerCount = resolved.filter((r) => getProjectPermission(project, r.person.initials) === "Owner").length;
-  const workloads = resolved.map((r) => getMemberWorkload(r.person.initials, projectTasks));
-  const overloaded = workloads.filter((w) => w.active > 5).length;
+  const ownerCount = memberRecords.filter((record) => record.role === "Owner").length;
+  const workloads = memberRecords.map((record) => getMemberWorkload(getInitials(record.user.name ?? record.user.email), projectTasks));
+  const overloaded = workloads.filter((workload) => workload.active > 5).length;
 
   return (
     <div className="fade-in flex flex-col" style={{ gap: 16 }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display" style={{ fontSize: 17, fontWeight: 560, color: "var(--text)", marginBottom: 4 }}>Team</h2>
-          <p className="text-ink-2" style={{ fontSize: 12.5 }}>{resolved.length} member{resolved.length === 1 ? "" : "s"} on this project.</p>
+          <p className="text-ink-2" style={{ fontSize: 12.5 }}>{memberRecords.length} member{memberRecords.length === 1 ? "" : "s"} on this project.</p>
         </div>
         {canManage && <ProjectAddMemberMenu candidates={candidates} onAdd={handleAdd} />}
       </div>
 
+      {mutationError && <p style={{ margin: 0, fontSize: 12.5, color: "#B3564B" }}>{mutationError}</p>}
+
       <div className="grid grid-cols-2 xl:grid-cols-4" style={{ gap: 12 }}>
-        <StatCard label="Members" value={String(resolved.length)} icon={Users} compact />
+        <StatCard label="Members" value={String(memberRecords.length)} icon={Users} compact />
         <StatCard label="Owners" value={String(ownerCount)} icon={Crown} compact />
-        <StatCard label="Avg. workload" value={resolved.length > 0 ? String(Math.round(workloads.reduce((s, w) => s + w.active, 0) / resolved.length)) : "0"} icon={Gauge} compact />
+        <StatCard label="Avg. workload" value={memberRecords.length > 0 ? String(Math.round(workloads.reduce((s, w) => s + w.active, 0) / memberRecords.length)) : "0"} icon={Gauge} compact />
         <StatCard label="Overloaded" value={String(overloaded)} icon={Gauge} compact />
       </div>
 
-      {resolved.length === 0 ? (
+      {membersLoading ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+          <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading project members…</p>
+        </div>
+      ) : membersError ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+          <p style={{ fontSize: 13.5, fontWeight: 600, color: "#B3564B" }}>Couldn't load project members</p>
+          <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 300 }}>{membersError}</p>
+        </div>
+      ) : memberRecords.length === 0 ? (
         <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
           <Users size={22} strokeWidth={1.6} color="var(--text-3)" />
           <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>No members yet</p>
@@ -187,15 +253,14 @@ export function ProjectTeamTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" style={{ gap: 14 }}>
-          {resolved.map((item, index) => (
+          {memberRecords.map((record, index) => (
             <MemberCard
-              key={`${item.person.initials}-${index}`}
-              resolved={item}
-              permission={getProjectPermission(project, item.person.initials)}
-              workload={workloads[index]}
+              key={record.id}
+              record={record}
               canManage={canManage}
-              onPermissionChange={(newPermission) => handlePermissionChange(item.person.initials, newPermission)}
-              onRemove={() => handleRemove(item)}
+              workload={workloads[index]}
+              onPermissionChange={(role) => handlePermissionChange(record, role)}
+              onRemove={() => handleRemove(record)}
             />
           ))}
         </div>

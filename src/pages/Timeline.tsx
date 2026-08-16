@@ -10,19 +10,17 @@ import {
 } from "lucide-react";
 
 import { useTaskContext } from "../context/taskContextValue";
-import { useProjectContext } from "../context/projectContextValue";
 import { useNotificationContext } from "../context/notificationContextValue";
 import { useTaskCommentHandlers } from "../hooks/useTaskCommentHandlers";
-import { team } from "../data/dashboardData";
 import { loadMembers } from "../data/teamData";
-import { resolveCurrentActor, getPermissionForProjectName, canEditProjectContent, canCommentOnProject } from "../data/workspaceData";
+import { resolveCurrentActor } from "../data/workspaceData";
 import { useAuth } from "../context/AuthContext";
-import { canManageAssignments, canComment as canCommentGlobally, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 import { notifyTaskAssigned, notifyTaskCompleted } from "../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../data/taskData";
 import {
   TaskDetailsDrawer,
-  buildAssigneeOptions,
+  buildWorkspaceAssigneeOptions,
   getAssigneeKey,
   getMembersForKeys,
   describeChanges,
@@ -60,8 +58,6 @@ const STATUS_FILTERS: StatusFilter[] = [
 ];
 
 const STATUS_OPTIONS: Status[] = ["To Do", "In Progress", "Completed"];
-
-const ASSIGNEE_OPTIONS = buildAssigneeOptions(team);
 
 /* ============================================================
    EMPTY STATE
@@ -189,39 +185,39 @@ function StatusLegend() {
 ============================================================ */
 
 export default function Timeline() {
-  const { tasks, setTasks } = useTaskContext();
-  const { projects } = useProjectContext();
+  const { tasks, setTasks, updateTask, deleteTask, workspaceMembers } = useTaskContext();
+
+  // Stage 2 (Real Task Assignees) — real workspace roster; see
+  // Tasks.tsx's identical constant for the full reasoning.
+  const ASSIGNEE_OPTIONS = useMemo(
+    () => buildWorkspaceAssigneeOptions(workspaceMembers),
+    [workspaceMembers]
+  );
   const { addNotification } = useNotificationContext();
   const members = useMemo(() => loadMembers(), []);
-  const { user, role: authRole } = useAuth();
+  const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
 
-  const effectiveAuthRole = resolveEffectiveRole(authRole);
-
-  /*
-    lib/permissions.ts layered on top of the existing project-level
-    checks below. The shared TaskDetailsDrawer bundles status,
-    priority, due date, and reassigning teammates into one "Save
-    changes" action, so editing here is gated by the "assignments"
-    resource — Project Manager and above — rather than the
-    Member-level "tasks"/"status" ones. Comments stay at the lower
-    "comments" resource — Member and above.
-  */
-  const hasTaskEditAccess = canManageAssignments(effectiveAuthRole);
-  const hasCommentsAccess = canCommentGlobally(effectiveAuthRole);
+  // Stage 6 (Permissions Alignment): real WorkspaceRole. Task
+  // create/update/delete are gated on the backend by workspace role
+  // alone (requireWorkspaceRole("OWNER", "ADMIN"), task.routes.ts) —
+  // not by any per-project role — so editing here no longer also
+  // requires the mock per-project canEditProjectContent check, which
+  // never reflected a real boundary for this action. Comments have no
+  // role restriction at all beyond workspace membership
+  // (comment.routes.ts only requires requireWorkspaceMembership),
+  // which is already guaranteed by being able to see this page's data.
+  const workspaceRole = useWorkspaceRole();
+  const hasTaskEditAccess = isWorkspaceManager(workspaceRole);
 
   function canEditTask(task: Task): boolean {
-    return (
-      canEditProjectContent(getPermissionForProjectName(task.project, projects, currentActor.initials)) &&
-      hasTaskEditAccess
-    );
+    void task;
+    return hasTaskEditAccess;
   }
 
   function canCommentOnTask(task: Task): boolean {
-    return (
-      canCommentOnProject(getPermissionForProjectName(task.project, projects, currentActor.initials)) &&
-      hasCommentsAccess
-    );
+    void task;
+    return true;
   }
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -341,7 +337,7 @@ export default function Timeline() {
   const canEditSelectedTask = selectedTask ? canEditTask(selectedTask) : false;
   const canCommentOnSelectedTask = selectedTask ? canCommentOnTask(selectedTask) : false;
 
-  const { handleAddComment, handleEditComment, handleDeleteComment } = useTaskCommentHandlers({
+  const { handleAddComment, handleEditComment, handleDeleteComment, commentsLoading, commentsError } = useTaskCommentHandlers({
     setTasks,
     selectedTask,
     currentActor,
@@ -407,10 +403,24 @@ export default function Timeline() {
       })
     );
 
+    // Persists the real-column subset for real (Phase 32; assigneeId
+    // Stage 2) — see TaskContext.tsx's updateTask; the block above
+    // stays as the instant local echo for activity, which has no
+    // backend column. Only the first selected assignee is real.
+    void updateTask(selectedTask.id, {
+      title: values.title,
+      description: values.description,
+      status: values.status,
+      priority: values.priority,
+      dueDate: values.dueDate ?? null,
+      assigneeId: values.assigneeKeys[0] ?? null,
+    });
+
     notifyTaskAssigned(addNotification, {
       taskTitle: selectedTask.title,
       projectName: selectedTask.project,
-      assignedNames: changes.newlyAssigned,
+      assigneeId: values.assigneeKeys[0],
+      actorId: user?.id,
       actor: currentActor,
       actionHref: "/timeline",
     });
@@ -419,6 +429,8 @@ export default function Timeline() {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
         projectName: selectedTask.project,
+        assigneeId: values.assigneeKeys[0],
+        actorId: user?.id,
         actor: currentActor,
         actionHref: "/timeline",
       });
@@ -428,11 +440,10 @@ export default function Timeline() {
   function handleDeleteTask() {
     if (!selectedTask || !canEditTask(selectedTask)) return;
 
-    setTasks((currentTasks) =>
-      currentTasks.filter((task) => task.id !== selectedTask.id)
-    );
-
     setSelectedTaskId(null);
+
+    // Real delete (Phase 32).
+    void deleteTask(selectedTask.id);
   }
 
   /* ==========================================================
@@ -793,6 +804,8 @@ export default function Timeline() {
         onAddComment={handleAddComment}
         onEditComment={handleEditComment}
         onDeleteComment={handleDeleteComment}
+        commentsLoading={commentsLoading}
+        commentsError={commentsError}
         onDelete={handleDeleteTask}
       />
     </div>

@@ -73,7 +73,7 @@ export const router = createBrowserRouter([
             // Danger Zone), so it's gated at Admin and above here. Every
             // other route above is still only auth-gated by the
             // ProtectedRoute this sits inside, unchanged.
-            element: <RequireRole requiredRole="Admin" />,
+            element: <RequireRole />,
             children: [{ path: "/settings", element: <Settings /> }],
           },
           { path: "*", element: <NotFound /> },

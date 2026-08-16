@@ -1,75 +1,87 @@
 import type { NewNotification } from "./notificationData";
 import type { WorkspaceActor } from "../types/workspace";
 
-/* ============================================================
-   SYSTEM NOTIFICATIONS
 
-   Phase 6.9 — Connect Systems. The single place that builds the
-   Notification copy for the "system" actions that generate one
-   automatically (task assigned, task completed, file uploaded,
-   member invited, project created) — every call site hands its
-   NotificationContext addNotification() in and its own actionHref,
-   rather than each page re-writing the same title/message/avatar
-   shape by hand. Comment notifications already have their own
-   single source (useTaskCommentHandlers) and aren't duplicated here.
-
-   Plain functions, not a hook — there's no other hook state involved,
-   just addNotification() plus the data already in hand at each call
-   site (mirrors addCommentToTask()'s shape: dependencies passed in,
-   nothing pulled from context internally).
-============================================================ */
 
 type Notify = (input: NewNotification) => void;
 
-/** Fires only when at least one person was newly assigned — no-ops on a save that didn't add an assignee. */
+/* ============================================================
+   Stage 4 (Real Notifications): every trigger below now targets a
+   real recipient userId (`recipientId`, verified server-side to
+   share a workspace with the caller — see notification.service.ts).
+   `avatar` is no longer set — see NotificationContext.tsx's doc
+   comment for why. A trigger with no real, single recipient to
+   target (self-notifying is pointless — it never left the actor's
+   own browser under the old localStorage system either) simply
+   doesn't fire, rather than notifying the wrong person or no one
+   correctly at all.
+============================================================ */
+
 export function notifyTaskAssigned(
   addNotification: Notify,
   params: {
     taskTitle: string;
     projectName: string;
-    assignedNames: string[];
+    /** Real assignee userId — the notification's recipient. */
+    assigneeId: string | null | undefined;
+    /** Real caller userId — assigning a task to yourself isn't worth notifying about. */
+    actorId: string | null | undefined;
     actor: WorkspaceActor;
     actionHref: string;
   }
 ): void {
-  const { taskTitle, projectName, assignedNames, actor, actionHref } = params;
+  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
 
-  if (assignedNames.length === 0) {
+  if (!assigneeId || assigneeId === actorId) {
     return;
   }
 
-  const isSingle = assignedNames.length === 1;
-
   addNotification({
     type: "assignment",
-    title: isSingle ? `${assignedNames[0]} was assigned a task` : "New task assignees",
-    message: `${assignedNames.join(", ")} ${isSingle ? "was" : "were"} assigned to "${taskTitle}" in ${projectName}.`,
-    avatar: { initials: actor.initials, bg: actor.bg, fg: actor.fg },
+    title: "You were assigned a task",
+    message: `${actor.name} assigned you "${taskTitle}" in ${projectName}.`,
+    recipientId: assigneeId,
     actionHref,
   });
 }
 
-/** Call only when a task's status just transitioned *into* "Completed" (not merely re-saved while already Completed). */
+
 export function notifyTaskCompleted(
   addNotification: Notify,
   params: {
     taskTitle: string;
     projectName: string;
+    /** Real assignee userId — the notification's recipient. */
+    assigneeId: string | null | undefined;
+    /** Real caller userId — an assignee completing their own task doesn't need to be told about it. */
+    actorId: string | null | undefined;
     actor: WorkspaceActor;
     actionHref: string;
   }
 ): void {
-  const { taskTitle, projectName, actor, actionHref } = params;
+  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
+
+  if (!assigneeId || assigneeId === actorId) {
+    return;
+  }
 
   addNotification({
     type: "project",
     title: "Task completed",
-    message: `"${taskTitle}" in ${projectName} was marked complete.`,
-    avatar: { initials: actor.initials, bg: actor.bg, fg: actor.fg },
+    message: `${actor.name} marked "${taskTitle}" in ${projectName} as complete.`,
+    recipientId: assigneeId,
     actionHref,
   });
 }
 
+// notifyFileUploaded intentionally has zero call sites right now — see
+// ProjectFilesTab.tsx's processFiles for the full reasoning: there's no
+// real endpoint yet to enumerate a project's *members* (as opposed to
+// its files), so there's no real audience to target without notifying
+// the whole workspace, which would over-broadcast a project-scoped
+// event to people outside the project. Kept defined (not deleted) for
+// when that endpoint exists — see the Stage 4 report's "genuine
+// backend limitation" note.
 export function notifyFileUploaded(
   addNotification: Notify,
   params: {
@@ -77,15 +89,16 @@ export function notifyFileUploaded(
     projectName: string;
     actor: WorkspaceActor;
     actionHref: string;
+    recipientId: string;
   }
 ): void {
-  const { fileName, projectName, actor, actionHref } = params;
+  const { fileName, projectName, actor, actionHref, recipientId } = params;
 
   addNotification({
     type: "file",
     title: `New file in ${projectName}`,
     message: `${actor.name} uploaded "${fileName}".`,
-    avatar: { initials: actor.initials, bg: actor.bg, fg: actor.fg },
+    recipientId,
     actionHref,
   });
 }
@@ -93,17 +106,19 @@ export function notifyFileUploaded(
 export function notifyMemberInvited(
   addNotification: Notify,
   params: {
-    memberName: string;
     department: string;
     actionHref: string;
+    /** Real userId of the person who was just added — the notification's recipient. */
+    recipientId: string;
   }
 ): void {
-  const { memberName, department, actionHref } = params;
+  const { department, actionHref, recipientId } = params;
 
   addNotification({
     type: "team",
-    title: `${memberName} was invited`,
-    message: `${memberName} was invited to join ${department}.`,
+    title: "You were added to the workspace",
+    message: `You were added as ${department}.`,
+    recipientId,
     actionHref,
   });
 }
@@ -114,15 +129,19 @@ export function notifyProjectCreated(
     projectName: string;
     actor: WorkspaceActor;
     actionHref: string;
+    /** Real userIds of every other workspace member to notify (caller already excluded by the site calling this). */
+    recipientIds: string[];
   }
 ): void {
-  const { projectName, actor, actionHref } = params;
+  const { projectName, actor, actionHref, recipientIds } = params;
 
-  addNotification({
-    type: "project",
-    title: "New project created",
-    message: `${actor.name} created "${projectName}".`,
-    avatar: { initials: actor.initials, bg: actor.bg, fg: actor.fg },
-    actionHref,
+  recipientIds.forEach((recipientId) => {
+    addNotification({
+      type: "project",
+      title: "New project created",
+      message: `${actor.name} created "${projectName}".`,
+      recipientId,
+      actionHref,
+    });
   });
 }

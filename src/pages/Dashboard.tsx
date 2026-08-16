@@ -219,7 +219,11 @@ export default function Dashboard() {
 
   return (
     <>
-      <GreetingCard />
+      <GreetingCard
+        tasksDueToday={tasksDueToday}
+        activeProjectCount={activeProjects.length}
+        hasAnyProjects={projects.length > 0}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 18 }}>
         <StatCard

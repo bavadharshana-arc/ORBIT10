@@ -6,11 +6,15 @@ import { Avatar } from "../ui/Avatar";
 interface ActivityFeedProps {
   activity: TeamActivityEntry[];
   members: Member[];
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 export function ActivityFeed({
   activity,
   members,
+  isLoading = false,
+  error = null,
 }: ActivityFeedProps) {
   return (
     <div
@@ -78,8 +82,17 @@ export function ActivityFeed({
         </div>
       </div>
 
-      {/* EMPTY STATE */}
-      {activity.length === 0 ? (
+      {/* LOADING / ERROR / EMPTY STATE */}
+      {isLoading ? (
+        <div style={{ padding: "24px 8px", textAlign: "center", background: "#F7F8FA", borderRadius: 11, border: "1px solid #EEF2F6" }}>
+          <span style={{ display: "block", fontSize: 11.5, color: "#98A2B3" }}>Loading activity…</span>
+        </div>
+      ) : error ? (
+        <div style={{ padding: "24px 8px", textAlign: "center", background: "#F7F8FA", borderRadius: 11, border: "1px solid #EEF2F6" }}>
+          <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#B3564B", marginBottom: 4 }}>Couldn't load activity</span>
+          <span style={{ display: "block", fontSize: 10.5, color: "#98A2B3" }}>{error}</span>
+        </div>
+      ) : activity.length === 0 ? (
         <div
           style={{
             padding: "24px 8px",

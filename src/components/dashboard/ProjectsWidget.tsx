@@ -5,14 +5,18 @@ import type { Project } from "../../types/dashboard";
 import { Pill } from "../ui/Pill";
 import { AvatarStack } from "../ui/AvatarStack";
 import { useProjectContext } from "../../context/projectContextValue";
+import { useTaskContext } from "../../context/taskContextValue";
+import { useWorkspace } from "../../context/workspaceContextValue";
 import { useNotificationContext } from "../../context/notificationContextValue";
-import { buildNewProject } from "../../data/projectData";
 import { loadMembers } from "../../data/teamData";
+import { formatProjectDue } from "../../data/projectData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { notifyProjectCreated } from "../../data/systemNotifications";
+import { ApiError } from "../../lib/api";
+import { createProject as createProjectRequest } from "../../lib/projectApi";
 import { CreateProjectDrawer, type CreateProjectValues } from "../CreateProjectDrawer";
 import { useAuth } from "../../context/AuthContext";
-import { canManageProjects, resolveEffectiveRole } from "../../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 
 interface ProjectRowProps {
   project: Project;
@@ -96,31 +100,67 @@ function ProjectRow({ project, onSelect }: ProjectRowProps) {
 
 export function ProjectsWidget() {
   const { projects, setProjects } = useProjectContext();
+  const { workspaceMembers } = useTaskContext();
+  const { currentWorkspaceId } = useWorkspace();
   const { addNotification } = useNotificationContext();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const members = useMemo(() => loadMembers(), []);
-  const { user, role: authRole } = useAuth();
+  const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
-  // Project creation is the "projects" resource in lib/permissions.ts —
-  // Project Manager and above. Gates both the "New project" button below
-  // and handleCreateProject itself, so a hidden button can't be bypassed.
-  const canCreate = canManageProjects(resolveEffectiveRole(authRole));
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — matches
+  // POST /projects's actual gate (requireWorkspaceRole("OWNER", "ADMIN"),
+  // project.routes.ts), same as Projects.tsx's own create gate.
+  const workspaceRole = useWorkspaceRole();
+  const canCreate = isWorkspaceManager(workspaceRole);
 
-  function handleCreateProject(values: CreateProjectValues) {
-    if (!canCreate) return;
+  // Stage 4 (Real Notifications) discovery: this widget used to build its
+  // new project entirely locally (buildNewProject + generateProjectId) —
+  // never persisted to the backend, gone on refresh, unlike Projects.tsx's
+  // real creation flow. A "project created" notification would be lying
+  // to real recipients about a project that doesn't exist, so this now
+  // calls the same real API Projects.tsx already uses.
+  async function handleCreateProject(values: CreateProjectValues) {
+    if (!canCreate || !currentWorkspaceId) return;
 
-    const newProject = buildNewProject(values, currentActor.initials);
+    setMutationError(null);
 
-    setProjects((current) => [newProject, ...current]);
-    setIsDrawerOpen(false);
+    try {
+      const record = await createProjectRequest(currentWorkspaceId, {
+        name: values.name,
+        description: values.description || undefined,
+      });
 
-    notifyProjectCreated(addNotification, {
-      projectName: newProject.name,
-      actor: currentActor,
-      actionHref: `/projects/${newProject.id}/overview`,
-    });
+      const newProject: Project = {
+        id: record.id,
+        name: record.name,
+        tag: values.tag,
+        progress: 0,
+        tasks: "0 / 0 tasks",
+        due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
+        people: values.people,
+        description: record.description ?? undefined,
+        color: values.color,
+        startDate: values.startDate || undefined,
+        dueDate: values.dueDate || undefined,
+        createdAt: record.createdAt,
+        memberRoles: { [currentActor.initials]: "Owner" },
+      };
+
+      setProjects((current) => [newProject, ...current]);
+      setIsDrawerOpen(false);
+
+      notifyProjectCreated(addNotification, {
+        projectName: newProject.name,
+        actor: currentActor,
+        actionHref: `/projects/${newProject.id}/overview`,
+        recipientIds: workspaceMembers.map((member) => member.userId).filter((id) => id !== user?.id),
+      });
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't create the project. Try again.");
+    }
   }
 
   return (
@@ -158,6 +198,10 @@ export function ProjectsWidget() {
           </button>
         )}
       </div>
+
+      {mutationError && (
+        <p style={{ margin: "6px 0 0", fontSize: 12, color: "#B3564B" }}>{mutationError}</p>
+      )}
 
       <div style={{ marginTop: 6 }}>
         {projects.map((project, i) => (

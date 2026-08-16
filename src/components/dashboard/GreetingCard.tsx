@@ -2,9 +2,50 @@ import { useNavigate } from "react-router-dom";
 import { Sparkles, ArrowUpRight } from "lucide-react";
 import { Pill } from "../ui/Pill";
 import { SquiggleUnderline } from "../doodles/SquiggleUnderline";
+import { useAuth } from "../../context/AuthContext";
 
-export function GreetingCard() {
+/* ============================================================
+   GREETING CARD (Phase 35)
+
+   Previously entirely hardcoded — "Good afternoon, Maya.", a fixed
+   "Friday, 17 July" date, and a made-up "You have 6 tasks due today
+   across 3 projects, and API v2 Migration is 90% complete" — shown
+   verbatim to every signed-in user regardless of who they were or
+   what was actually in their workspace. That's the first thing a
+   brand-new account saw on landing at the Dashboard, which is why it
+   looked like "old Demo/Maya Chen data": it wasn't real data at all,
+   just static copy nobody had wired up. Now greets the real
+   signed-in user (useAuth) with the real date and a summary built
+   from Dashboard.tsx's already-live TaskContext/ProjectContext
+   numbers — including an honest empty-state line for an account with
+   no projects yet, instead of a fabricated one.
+============================================================ */
+
+export interface GreetingCardProps {
+  tasksDueToday: number;
+  activeProjectCount: number;
+  hasAnyProjects: boolean;
+}
+
+const TIME_OF_DAY = (hour: number): "morning" | "afternoon" | "evening" => {
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+};
+
+export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects }: GreetingCardProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const now = new Date();
+  const firstName = (user?.name ?? "there").trim().split(/\s+/)[0];
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  const summary = !hasAnyProjects
+    ? "Create your first project to get started."
+    : tasksDueToday > 0
+      ? `You have ${tasksDueToday} task${tasksDueToday === 1 ? "" : "s"} due today across ${activeProjectCount} active project${activeProjectCount === 1 ? "" : "s"}.`
+      : "Nothing due today — you're all caught up.";
 
   return (
     <div
@@ -137,7 +178,7 @@ export function GreetingCard() {
 
       <div style={{ position: "relative", maxWidth: 480 }}>
         <Pill tone="blue">
-          Friday, 17 July
+          {dateLabel}
         </Pill>
 
         <h1
@@ -149,7 +190,7 @@ export function GreetingCard() {
             marginBottom: 6,
           }}
         >
-          Good afternoon, Maya.
+          Good {TIME_OF_DAY(now.getHours())}, {firstName}.
         </h1>
 
         <div style={{ marginBottom: 14 }}>
@@ -164,8 +205,7 @@ export function GreetingCard() {
             marginBottom: 20,
           }}
         >
-          You have 6 tasks due today across 3 projects, and API v2 Migration is
-          90% complete — nearly ready to ship.
+          {summary}
         </p>
 
         <div className="flex items-center" style={{ gap: 10 }}>

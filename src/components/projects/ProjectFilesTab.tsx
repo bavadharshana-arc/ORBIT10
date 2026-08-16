@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 import {
   UploadCloud,
@@ -20,16 +20,13 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import type { FileKind, ProjectFileRecord } from "../../types/workspace";
-import { loadMembers } from "../../data/teamData";
+import type { WorkspaceActor } from "../../types/workspace";
+import { loadMembers, getInitials } from "../../data/teamData";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
-import { useNotificationContext } from "../../context/notificationContextValue";
-import { usePersistedState } from "../../hooks/usePersistedState";
+import { useWorkspace } from "../../context/workspaceContextValue";
 import {
-  projectFilesKey,
-  seedFilesForProject,
   resolveCurrentActor,
-  generateId,
   inferFileKind,
   formatFileSize,
   FILE_KIND_LABEL,
@@ -37,10 +34,17 @@ import {
   setSessionObjectUrl,
   getSessionObjectUrl,
   clearSessionObjectUrl,
-  appendProjectActivity,
   canEditProjectContent,
 } from "../../data/workspaceData";
-import { notifyFileUploaded } from "../../data/systemNotifications";
+import { ApiError } from "../../lib/api";
+import {
+  listFiles as listFilesRequest,
+  createFile as createFileRequest,
+  deleteFile as deleteFileRequest,
+  type ProjectFileApiRecord,
+} from "../../lib/fileApi";
+import { createActivityEvent } from "../../lib/activityApi";
+import { listWorkspaceMembers, type WorkspaceMemberRecord } from "../../lib/workspaceApi";
 import { Avatar } from "../ui/Avatar";
 import { Pill } from "../ui/Pill";
 
@@ -200,25 +204,108 @@ const iconBtn = {
   flexShrink: 0,
 } as const;
 
+const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+
+/** Resolves a real uploaderId into a WorkspaceActor (real name/initials/avatar) — same pattern as TaskContext.tsx's assignee resolution (Phase 26) and useTaskCommentHandlers.ts's comment authors (Phase 27). */
+function resolveUploader(
+  uploaderId: string | null,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallback: WorkspaceActor,
+): WorkspaceActor {
+  if (!uploaderId) return fallback;
+  const member = membersById.get(uploaderId);
+  if (!member) return fallback;
+  const name = member.user.name ?? member.user.email;
+  return {
+    id: uploaderId,
+    name,
+    initials: getInitials(name),
+    bg: member.user.avatarBg ?? NEUTRAL_AVATAR.bg,
+    fg: member.user.avatarFg ?? NEUTRAL_AVATAR.fg,
+  };
+}
+
+function mapFileRecord(
+  record: ProjectFileApiRecord,
+  membersById: Map<string, WorkspaceMemberRecord>,
+  fallbackUploader: WorkspaceActor,
+): ProjectFileRecord {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    name: record.name,
+    extension: record.extension,
+    kind: record.kind,
+    sizeBytes: record.sizeBytes,
+    folder: record.folder,
+    uploadedBy: resolveUploader(record.uploaderId, membersById, fallbackUploader),
+    uploadedAt: new Date(record.createdAt).getTime(),
+  };
+}
+
 /* ============================================================
    FILES TAB
 ============================================================ */
 
 export function ProjectFilesTab() {
   const { project, permission } = useProjectWorkspace();
-  const { addNotification } = useNotificationContext();
   const canEdit = canEditProjectContent(permission);
   const members = useMemo(() => loadMembers(), []);
   const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
+  const { currentWorkspaceId } = useWorkspace();
 
-  const [files, setFiles] = usePersistedState<ProjectFileRecord[]>(projectFilesKey(project.id), () => seedFilesForProject(project, members));
+  const [files, setFiles] = useState<ProjectFileRecord[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      return;
+    }
+
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
+
+    // Deferred into the promise chain — never synchronous in the effect
+    // body — same reasoning as every other Phase 24–27 fetch effect.
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return null;
+        setFilesLoading(true);
+        setFilesError(null);
+        return Promise.all([listWorkspaceMembers(workspaceId), listFilesRequest(workspaceId, projectId)]);
+      })
+      .then((result) => {
+        if (cancelled || !result) return;
+        const [workspaceMembers, records] = result;
+        const membersById = new Map(workspaceMembers.map((member) => [member.userId, member] as const));
+        setFiles(records.map((record) => mapFileRecord(record, membersById, currentActor)));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFiles([]);
+        setFilesError(err instanceof ApiError ? err.message : "Couldn't load files. Try again in a moment.");
+      })
+      .finally(() => {
+        if (!cancelled) setFilesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // currentActor intentionally omitted — it's only a display fallback,
+    // not a refetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspaceId, project.id]);
 
   const [search, setSearch] = useState("");
   const [folderFilter, setFolderFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [isDragging, setIsDragging] = useState(false);
   const [previewFile, setPreviewFile] = useState<ProjectFileRecord | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const folders = useMemo(() => {
@@ -234,38 +321,67 @@ export function ProjectFilesTab() {
       .sort((a, b) => b.uploadedAt - a.uploadedAt);
   }, [files, folderFilter, search]);
 
-  function processFiles(fileList: FileList) {
-    if (!canEdit) return;
+  async function processFiles(fileList: FileList) {
+    if (!canEdit || !currentWorkspaceId) return;
     const folder = folderFilter === "all" ? DEFAULT_FOLDER : folderFilter;
-    const added: ProjectFileRecord[] = Array.from(fileList).map((file) => {
+
+    setMutationError(null);
+
+    // Metadata-only, per file — the backend never stores bytes (Phase 15
+    // approved scope), so only name/extension/kind/size/folder are sent.
+    // The real browser File object is kept just long enough to build an
+    // in-session object URL for preview/download (setSessionObjectUrl,
+    // unchanged) — never persisted anywhere, including localStorage.
+    for (const file of Array.from(fileList)) {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const id = generateId("file");
-      const objectUrl = URL.createObjectURL(file);
-      setSessionObjectUrl(id, objectUrl);
-      return {
-        id,
-        projectId: project.id,
-        name: file.name.replace(/\.[^.]+$/, ""),
-        extension,
-        kind: inferFileKind(extension),
-        sizeBytes: file.size,
-        folder,
-        uploadedBy: currentActor,
-        uploadedAt: Date.now(),
-      };
-    });
+      const name = file.name.replace(/\.[^.]+$/, "");
+      const kind = inferFileKind(extension);
 
-    setFiles((current) => [...added, ...current]);
-    added.forEach((file) => {
-      appendProjectActivity(project.id, { type: "file_uploaded", text: `${currentActor.name} uploaded "${file.name}.${file.extension}"`, actor: currentActor });
+      try {
+        const record = await createFileRequest(currentWorkspaceId, project.id, {
+          name,
+          extension,
+          kind,
+          sizeBytes: file.size,
+          folder,
+        });
 
-      notifyFileUploaded(addNotification, {
-        fileName: `${file.name}.${file.extension}`,
-        projectName: project.name,
-        actor: currentActor,
-        actionHref: `/projects/${project.id}/files`,
-      });
-    });
+        const objectUrl = URL.createObjectURL(file);
+        setSessionObjectUrl(record.id, objectUrl);
+
+        const newFile: ProjectFileRecord = {
+          id: record.id,
+          projectId: record.projectId,
+          name: record.name,
+          extension: record.extension,
+          kind: record.kind,
+          sizeBytes: record.sizeBytes,
+          folder: record.folder,
+          uploadedBy: currentActor,
+          uploadedAt: new Date(record.createdAt).getTime(),
+        };
+
+        setFiles((current) => [newFile, ...current]);
+
+        if (currentWorkspaceId) {
+          // Best-effort, real activity log entry — failure here shouldn't
+          // undo or block the upload that already succeeded above.
+          createActivityEvent(currentWorkspaceId, project.id, {
+            type: "file_uploaded",
+            text: `${currentActor.name} uploaded "${newFile.name}.${newFile.extension}"`,
+            actorId: user?.id,
+          }).catch((err: unknown) => console.error("Couldn't log file-upload activity:", err));
+        }
+
+        // Stage 4 (Real Notifications): no notifyFileUploaded call here —
+        // there's no real endpoint yet to list a project's *members* (as
+        // opposed to its files), so there's no real audience to target
+        // without over-broadcasting to the whole workspace. See
+        // systemNotifications.ts's doc comment on notifyFileUploaded.
+      } catch (error) {
+        setMutationError(error instanceof ApiError ? error.message : `Couldn't upload "${file.name}". Try again.`);
+      }
+    }
   }
 
   function handleFilesSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -298,11 +414,19 @@ export function ProjectFilesTab() {
     setTimeout(() => URL.revokeObjectURL(fallbackUrl), 1000);
   }
 
-  function handleDelete(id: string) {
-    if (!canEdit) return;
-    setFiles((current) => current.filter((file) => file.id !== id));
-    setPreviewFile((current) => (current?.id === id ? null : current));
-    clearSessionObjectUrl(id);
+  async function handleDelete(id: string) {
+    if (!canEdit || !currentWorkspaceId) return;
+
+    setMutationError(null);
+
+    try {
+      await deleteFileRequest(currentWorkspaceId, project.id, id);
+      setFiles((current) => current.filter((file) => file.id !== id));
+      setPreviewFile((current) => (current?.id === id ? null : current));
+      clearSessionObjectUrl(id);
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't delete the file. Try again.");
+    }
   }
 
   return (
@@ -315,6 +439,8 @@ export function ProjectFilesTab() {
           <p className="text-ink-2" style={{ fontSize: 12.5 }}>Documents and assets shared inside this project.</p>
         </div>
       </div>
+
+      {mutationError && <p style={{ margin: 0, fontSize: 12.5, color: "#B3564B" }}>{mutationError}</p>}
 
       {canEdit && (
         <div
@@ -392,7 +518,17 @@ export function ProjectFilesTab() {
         })}
       </div>
 
-      {filtered.length === 0 ? (
+      {filesLoading ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+          <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading files…</p>
+        </div>
+      ) : filesError ? (
+        <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
+          <Inbox size={22} strokeWidth={1.6} color="var(--text-3)" />
+          <p style={{ fontSize: 13.5, fontWeight: 600, color: "#B3564B" }}>Couldn't load files</p>
+          <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 300 }}>{filesError}</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-card border-soft shadow-float fade-in flex flex-col items-center" style={{ borderRadius: 20, padding: "48px 24px", textAlign: "center", gap: 10 }}>
           <Inbox size={22} strokeWidth={1.6} color="var(--text-3)" />
           <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>No files yet</p>

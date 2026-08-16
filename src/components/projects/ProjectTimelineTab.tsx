@@ -11,10 +11,12 @@ import {
   describeChanges,
   generateId,
   TaskDetailsDrawer,
+  buildWorkspaceAssigneeOptions,
   type TaskDetailsSaveValues,
 } from "../TaskDetailsDrawer";
 import { loadMembers } from "../../data/teamData";
-import { buildProjectAssigneeOptions, canEditProjectContent, canCommentOnProject, resolveCurrentActor } from "../../data/workspaceData";
+import { resolveCurrentActor } from "../../data/workspaceData";
+import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -41,16 +43,21 @@ const STATUS_OPTIONS: Status[] = ["To Do", "In Progress", "Completed"];
  * grouping, since there's only ever one project here).
  */
 export function ProjectTimelineTab() {
-  const { projectTasks: tasks, project, permission } = useProjectWorkspace();
-  const { setTasks } = useTaskContext();
+  const { projectTasks: tasks, project } = useProjectWorkspace();
+  const { setTasks, updateTask, deleteTask, workspaceMembers } = useTaskContext();
   const { addNotification } = useNotificationContext();
-  const canEdit = canEditProjectContent(permission);
-  const canComment = canCommentOnProject(permission);
+  // Stage 6 (Permissions Alignment): real WorkspaceRole — see
+  // ProjectListTab.tsx's identical constant for the full reasoning.
+  const workspaceRole = useWorkspaceRole();
+  const canEdit = isWorkspaceManager(workspaceRole);
+  const canComment = true;
 
   const members = useMemo(() => loadMembers(), []);
   const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
-  const assigneeOptions = useMemo(() => buildProjectAssigneeOptions(project, members), [project, members]);
+  // Stage 2 (Real Task Assignees) — real workspace roster; see
+  // ProjectWorkspace.tsx's identical constant for the full reasoning.
+  const assigneeOptions = useMemo(() => buildWorkspaceAssigneeOptions(workspaceMembers), [workspaceMembers]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -121,10 +128,23 @@ export function ProjectTimelineTab() {
       })
     );
 
+    // Persists the real-column subset for real (Phase 32; assigneeId
+    // Stage 2) — see TaskContext.tsx's updateTask. Only the first
+    // selected assignee is real.
+    void updateTask(selectedTask.id, {
+      title: values.title,
+      description: values.description,
+      status: values.status,
+      priority: values.priority,
+      dueDate: values.dueDate ?? null,
+      assigneeId: values.assigneeKeys[0] ?? null,
+    });
+
     notifyTaskAssigned(addNotification, {
       taskTitle: selectedTask.title,
       projectName: selectedTask.project,
-      assignedNames: changes.newlyAssigned,
+      assigneeId: values.assigneeKeys[0],
+      actorId: user?.id,
       actor: currentActor,
       actionHref: `/projects/${project.id}/timeline`,
     });
@@ -133,13 +153,15 @@ export function ProjectTimelineTab() {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
         projectName: selectedTask.project,
+        assigneeId: values.assigneeKeys[0],
+        actorId: user?.id,
         actor: currentActor,
         actionHref: `/projects/${project.id}/timeline`,
       });
     }
   }
 
-  const { handleAddComment, handleEditComment, handleDeleteComment } = useTaskCommentHandlers({
+  const { handleAddComment, handleEditComment, handleDeleteComment, commentsLoading, commentsError } = useTaskCommentHandlers({
     setTasks,
     selectedTask,
     currentActor,
@@ -151,8 +173,8 @@ export function ProjectTimelineTab() {
 
   function handleDeleteTask() {
     if (!selectedTask || !canEdit) return;
-    setTasks((currentTasks) => currentTasks.filter((task) => task.id !== selectedTask.id));
     setSelectedTaskId(null);
+    void deleteTask(selectedTask.id);
   }
 
   if (tasks.length === 0) {
@@ -217,6 +239,8 @@ export function ProjectTimelineTab() {
         onAddComment={handleAddComment}
         onEditComment={handleEditComment}
         onDeleteComment={handleDeleteComment}
+        commentsLoading={commentsLoading}
+        commentsError={commentsError}
         onDelete={handleDeleteTask}
       />
     </>

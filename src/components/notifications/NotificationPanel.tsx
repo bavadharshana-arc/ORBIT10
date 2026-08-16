@@ -24,7 +24,7 @@ const headerButtonStyle = (disabled: boolean): CSSProperties => ({
 
 /** The dropdown content anchored under NotificationBell's trigger — header actions, grouped list, empty state. */
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotificationContext();
+  const { notifications, unreadCount, isLoading, error, markAsRead, markAllAsRead, clearAll } = useNotificationContext();
   const navigate = useNavigate();
 
   const groups = groupNotificationsByRecency(notifications);
@@ -72,12 +72,21 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
       <div className="border-soft-t" />
 
       <div style={{ maxHeight: 420, overflowY: "auto" }}>
-        {notifications.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center" style={{ padding: "44px 24px", textAlign: "center", gap: 10 }}>
+            <p className="text-ink-3" style={{ fontSize: 12.5 }}>Loading notifications…</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center" style={{ padding: "44px 24px", textAlign: "center", gap: 8 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#B3564B", margin: 0 }}>Couldn't load notifications</p>
+            <p className="text-ink-3" style={{ fontSize: 11.5, maxWidth: 240, margin: 0 }}>{error}</p>
+          </div>
+        ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center" style={{ padding: "44px 24px", textAlign: "center", gap: 10 }}>
             <Bell size={22} strokeWidth={1.6} color="var(--text-3)" />
             <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", margin: 0 }}>No notifications</p>
             <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 240, margin: 0 }}>
-              New activity — assignments, comments, mentions, and more — will show up here.
+              New activity — assignments, comments, and more — will show up here.
             </p>
           </div>
         ) : (

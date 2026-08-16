@@ -30,17 +30,10 @@ import {
   type Task,
 } from "../data/taskData";
 
-import { team } from "../data/dashboardData";
 import { loadMembers } from "../data/teamData";
-import {
-  resolveCurrentActor,
-  getProjectPermission,
-  getPermissionForProjectName,
-  canEditProjectContent,
-  canCommentOnProject,
-} from "../data/workspaceData";
+import { resolveCurrentActor } from "../data/workspaceData";
 import { useAuth } from "../context/AuthContext";
-import { canManageTasks, canComment as canCommentGlobally, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 import {
   notifyTaskAssigned,
@@ -52,8 +45,11 @@ import { AvatarStack } from "../components/ui/AvatarStack";
 
 import { useTaskContext } from "../context/taskContextValue";
 import { useProjectContext } from "../context/projectContextValue";
+import { useWorkspace } from "../context/workspaceContextValue";
 import { useNotificationContext } from "../context/notificationContextValue";
 import { useTaskCommentHandlers } from "../hooks/useTaskCommentHandlers";
+import { ApiError } from "../lib/api";
+import { createTask as createTaskRequest } from "../lib/taskApi";
 
 import {
   CreateTaskDrawer,
@@ -62,7 +58,7 @@ import {
 
 import {
   TaskDetailsDrawer,
-  buildAssigneeOptions,
+  buildWorkspaceAssigneeOptions,
   generateId,
   getMembersForKeys,
   describeChanges,
@@ -136,9 +132,6 @@ const PRIORITY_TONE: Record<
   Medium: "blue",
   High: "dark",
 };
-
-const ASSIGNEE_OPTIONS =
-  buildAssigneeOptions(team);
 
 /* ============================================================
    HELPERS
@@ -626,47 +619,62 @@ export default function Tasks() {
   const {
     tasks,
     setTasks,
+    updateTask,
+    deleteTask,
+    workspaceMembers,
   } = useTaskContext();
 
   const { projects } = useProjectContext();
+  const { currentWorkspaceId } = useWorkspace();
+
+  // Stage 2 (Real Task Assignees) — real workspace roster, replacing
+  // the old mock-team-based ASSIGNEE_OPTIONS module constant. `key` on
+  // each option is now a real userId (see buildWorkspaceAssigneeOptions),
+  // so a selection here is directly usable as Task.assigneeId.
+  const ASSIGNEE_OPTIONS = useMemo(
+    () => buildWorkspaceAssigneeOptions(workspaceMembers),
+    [workspaceMembers]
+  );
 
   const { addNotification } = useNotificationContext();
 
+  // Phase 32: surfaces a failed create-task request — same convention
+  // ProjectWorkspace.tsx's own create-task flow already uses, rather
+  // than a silent fallback to a task that only exists locally.
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
   const members = useMemo(() => loadMembers(), []);
-  const { user, role: authRole } = useAuth();
+  const { user } = useAuth();
   const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
-  const effectiveAuthRole = resolveEffectiveRole(authRole);
-  const hasTasksAccess = canManageTasks(effectiveAuthRole);
-  const hasCommentsAccess = canCommentGlobally(effectiveAuthRole);
+  // Stage 6 (Permissions Alignment): real WorkspaceRole. Task
+  // create/update/delete are gated on the backend by workspace role
+  // alone (requireWorkspaceRole("OWNER", "ADMIN"), task.routes.ts) —
+  // not by any per-project role — so editing/creating here no longer
+  // also requires the mock per-project canEditProjectContent check,
+  // which never reflected a real boundary for this action. Comments
+  // have no role restriction at all beyond workspace membership
+  // (comment.routes.ts only requires requireWorkspaceMembership),
+  // which is already guaranteed by being able to see this page's data.
+  const workspaceRole = useWorkspaceRole();
+  const hasTasksAccess = isWorkspaceManager(workspaceRole);
 
   /*
-    Only projects the current user has Editor+ access to are offered
-    as a destination for new tasks — the same restriction the
-    project-scoped "New Task" button already enforces, just resolved
-    per-project here since this page isn't nested under any single
-    project's context.
+    Every real project in the workspace is a valid destination for a
+    new task (task creation isn't project-role-gated on the backend) —
+    the picker just lists them all, same as any other project-scoped
+    dropdown in this app once it's backed by real data.
   */
-  const editableProjectNames = useMemo(
-    () =>
-      projects
-        .filter((project) => canEditProjectContent(getProjectPermission(project, currentActor.initials)))
-        .map((project) => project.name),
-    [projects, currentActor]
-  );
+  const editableProjectNames = useMemo(() => projects.map((project) => project.name), [projects]);
   const canCreateTask = editableProjectNames.length > 0 && hasTasksAccess;
 
   function canEditTask(task: Task): boolean {
-    return (
-      canEditProjectContent(getPermissionForProjectName(task.project, projects, currentActor.initials)) &&
-      hasTasksAccess
-    );
+    void task;
+    return hasTasksAccess;
   }
 
   function canCommentOnTask(task: Task): boolean {
-    return (
-      canCommentOnProject(getPermissionForProjectName(task.project, projects, currentActor.initials)) &&
-      hasCommentsAccess
-    );
+    void task;
+    return true;
   }
 
   const projectOptions = editableProjectNames;
@@ -785,6 +793,8 @@ export default function Tasks() {
     handleAddComment,
     handleEditComment,
     handleDeleteComment,
+    commentsLoading,
+    commentsError,
   } = useTaskCommentHandlers({
     setTasks,
     selectedTask,
@@ -908,10 +918,13 @@ export default function Tasks() {
      CREATE TASK
   ========================================================== */
 
-  function handleCreateTask(
+  async function handleCreateTask(
     values: CreateTaskValues
   ) {
-    if (!editableProjectNames.includes(values.project)) return;
+    if (!editableProjectNames.includes(values.project) || !currentWorkspaceId) return;
+
+    const project = projects.find((candidate) => candidate.name === values.project);
+    if (!project) return;
 
     const selectedAssignees =
       getMembersForKeys(
@@ -923,70 +936,90 @@ export default function Tasks() {
       values.due.trim() ||
       "No due date";
 
-    const newTask: Task = {
-      id: generateId(
-        "task"
-      ),
+    setMutationError(null);
 
-      title:
-        values.title,
+    try {
+      // Real create (Phase 32) — same endpoint/shape ProjectWorkspace.tsx's
+      // "New Task" already uses. Stage 2 (Real Task Assignees): the
+      // picker's keys are now real userIds (buildWorkspaceAssigneeOptions),
+      // so the first selection is sent as the real assigneeId — Task only
+      // has one real assignee column, so any *additional* local selections
+      // beyond the first stay a display-only echo (selectedAssignees below),
+      // same as before.
+      const record = await createTaskRequest(currentWorkspaceId, project.id, {
+        title: values.title,
+        description: values.description || undefined,
+        status: values.status,
+        priority: values.priority,
+        dueDate: values.dueDate || null,
+        assigneeId: values.assigneeKeys[0] ?? null,
+      });
 
-      description:
-        values.description,
+      const newTask: Task = {
+        id: record.id,
 
-      project:
-        values.project,
+        title:
+          values.title,
 
-      due,
+        description:
+          values.description,
 
-      dueDate:
-        values.dueDate ||
-        undefined,
+        project:
+          values.project,
 
-      dueGroup:
-        getDueGroup(
-          values.dueDate
-        ),
+        due,
 
-      priority:
-        values.priority,
+        dueDate:
+          values.dueDate ||
+          undefined,
 
-      status:
-        values.status,
-
-      assignee:
-        selectedAssignees[0],
-
-      assignees:
-        selectedAssignees,
-
-      comments: [],
-
-      activity: [
-        {
-          id: generateId(
-            "activity"
+        dueGroup:
+          getDueGroup(
+            values.dueDate
           ),
 
-          text:
-            "Task created",
+        priority:
+          values.priority,
 
-          timestamp:
-            "Just now",
-        },
-      ],
-    };
+        status:
+          values.status,
 
-    setTasks(
-      (currentTasks) => [
-        newTask,
-        ...currentTasks,
-      ]
-    );
+        assignee:
+          selectedAssignees[0],
 
-    setIsCreateDrawerOpen(
-      false
-    );
+        assignees:
+          selectedAssignees,
+
+        comments: [],
+
+        activity: [
+          {
+            id: generateId(
+              "activity"
+            ),
+
+            text:
+              "Task created",
+
+            timestamp:
+              "Just now",
+          },
+        ],
+      };
+
+      setTasks(
+        (currentTasks) => [
+          newTask,
+          ...currentTasks,
+        ]
+      );
+
+      setIsCreateDrawerOpen(
+        false
+      );
+    } catch (error) {
+      setMutationError(error instanceof ApiError ? error.message : "Couldn't create the task. Try again.");
+    }
   }
 
   /* ==========================================================
@@ -1138,12 +1171,27 @@ export default function Tasks() {
         )
     );
 
+    // Persists title/description/status/priority/dueDate/assigneeId for
+    // real (Phase 32; assigneeId Stage 2) — the block above is the
+    // existing instant local echo (also covering activity, which has no
+    // backend column). Only the first selected assignee is real — see
+    // handleCreateTask's comment above.
+    void updateTask(selectedTask.id, {
+      title: values.title,
+      description: values.description,
+      status: values.status,
+      priority: values.priority,
+      dueDate: values.dueDate ?? null,
+      assigneeId: values.assigneeKeys[0] ?? null,
+    });
+
     notifyTaskAssigned(
       addNotification,
       {
         taskTitle: selectedTask.title,
         projectName: selectedTask.project,
-        assignedNames: changes.newlyAssigned,
+        assigneeId: values.assigneeKeys[0],
+        actorId: user?.id,
         actor: currentActor,
         actionHref: "/tasks",
       }
@@ -1155,6 +1203,8 @@ export default function Tasks() {
         {
           taskTitle: selectedTask.title,
           projectName: selectedTask.project,
+          assigneeId: values.assigneeKeys[0],
+          actorId: user?.id,
           actor: currentActor,
           actionHref: "/tasks",
         }
@@ -1172,15 +1222,11 @@ export default function Tasks() {
     const target = tasks.find((task) => task.id === taskId);
     if (!target || !canEditTask(target)) return;
 
-    setTasks(
-      (currentTasks) =>
-        currentTasks.filter(
-          (task) =>
-            task.id !== taskId
-        )
-    );
-
     setSelectedTaskId(null);
+
+    // Real delete (Phase 32) — removes the task from shared TaskContext
+    // state once the DELETE actually succeeds (see TaskContext.tsx).
+    void deleteTask(taskId);
   }
 
   /* ==========================================================
@@ -1193,6 +1239,12 @@ export default function Tasks() {
     const target = tasks.find((task) => task.id === taskId);
     if (!target || !canEditTask(target)) return;
 
+    const newStatus: Status =
+      target.status ===
+      "Completed"
+        ? "To Do"
+        : "Completed";
+
     setTasks(
       (currentTasks) =>
         currentTasks.map(
@@ -1203,12 +1255,6 @@ export default function Tasks() {
             ) {
               return task;
             }
-
-            const newStatus: Status =
-              task.status ===
-              "Completed"
-                ? "To Do"
-                : "Completed";
 
             return {
               ...task,
@@ -1235,6 +1281,8 @@ export default function Tasks() {
           }
         )
     );
+
+    void updateTask(taskId, { status: newStatus });
   }
 
   /* ==========================================================
@@ -1255,6 +1303,10 @@ export default function Tasks() {
       ====================================================== */}
 
       <div className="min-w-0 flex-1">
+
+      {mutationError && (
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#B3564B" }}>{mutationError}</p>
+      )}
 
       {/* ======================================================
           HEADER
@@ -1686,6 +1738,8 @@ export default function Tasks() {
         onDeleteComment={
           handleDeleteComment
         }
+        commentsLoading={commentsLoading}
+        commentsError={commentsError}
         onDelete={() => {
           if (selectedTask) {
             handleDeleteTask(

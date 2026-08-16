@@ -18,22 +18,8 @@ export type Priority =
 export interface TaskComment {
   id: string;
   text: string;
-
-  /**
-   * Full author identity (avatar colors + real name), not just a
-   * display label — lets the UI render a real avatar and tell
-   * authors apart instead of every comment reading "You".
-   */
   author: WorkspaceActor;
-
-  /**
-   * Epoch ms. Real timestamp (not a display string) so the UI can
-   * render live relative time via formatRelativeTime(), matching the
-   * Discussion/ActivityEvent convention elsewhere in the workspace.
-   */
   createdAt: number;
-
-  /** Epoch ms — set only once the comment has been edited; drives the "(edited)" label. */
   editedAt?: number;
 }
 
@@ -57,104 +43,26 @@ export type DueGroup =
 
 
 export interface Task {
-  /* Basic information */
-
   id: string;
-
   title: string;
-
   description: string;
-
   project: string;
-
-  /* Due information */
-
   due: string;
-
-  /*
-   * Stores the actual date from the Create Task Drawer.
-   *
-   * Example:
-   * "2026-08-02"
-   *
-   * Optional because older tasks may not have
-   * a specific date.
-   */
   dueDate?: string;
-
-  /*
-   * Start date for tasks that span a range of days
-   * (rendered as a horizontal bar on the Timeline).
-   *
-   * Example:
-   * "2026-07-28"
-   *
-   * Optional — tasks without a startDate but with a
-   * dueDate render as a single-day milestone marker
-   * on the Timeline instead of a spanning bar.
-   */
   startDate?: string;
-
-  /*
-   * Marks a task as a true milestone (a single-point-in-time
-   * checkpoint, e.g. a review or a release) rather than a piece of
-   * work with duration.
-   *
-   * Milestones always render as a diamond marker on the Timeline at
-   * their due date, even if a startDate is present. Every other task
-   * with a due date renders as a horizontal Gantt bar — falling back
-   * to a same-day bar when no startDate was set.
-   */
   isMilestone?: boolean;
-
-  /*
-   * Used to group tasks in the Tasks page.
-   */
   dueGroup: DueGroup;
-
-  /* Task metadata */
-
   priority: Priority;
-
   status: Status;
-
-  /* Assignee */
-
-  /*
-   * Main/primary assignee.
-   *
-   * Kept for backward compatibility with
-   * existing code.
-   */
   assignee?: TeamMember;
-
-  /*
-   * Unified assignee model.
-   *
-   * Supports one or multiple assignees.
-   */
   assignees: TeamMember[];
-
-  /* Collaboration */
-
+  /** Real assignee userId, straight from the backend's Task.assigneeId column (Stage 2) — `assignee`/`assignees` are display-only and carry no id, so this is the one place a caller can get a real, sendable recipient/actor id off a Task. Undefined when unassigned. */
+  assigneeId?: string;
   comments: TaskComment[];
-
   activity: TaskActivityEntry[];
 }
 
 
-/*
- * Formats a Date as a "YYYY-MM-DD" string using its LOCAL calendar day.
- *
- * `Date#toISOString()` converts to UTC first, so for any timezone with a
- * non-zero UTC offset it can report the wrong calendar day for part of
- * the day (e.g. still "yesterday" in UTC while it's already "today"
- * locally, or already "tomorrow" in UTC while it's still "today"
- * locally). getDueGroup() below parses dueDate strings as local dates,
- * so dueDate must be derived the same way — otherwise "Today" tasks can
- * silently bucket into "Overdue" or "Tomorrow" depending on the time of
- * day and the user's timezone.
- */
 function toLocalDateString(
   date: Date
 ): string {
@@ -884,12 +792,7 @@ export function getDueGroup(
 }
 
 
-/*
- * Tasks due soon and not yet done — due today, tomorrow, or later this
- * week — nearest due date first. Shared by the Dashboard's "Upcoming"
- * widget and the Analytics "Upcoming" list so both agree on what
- * counts as "upcoming" instead of each re-deriving it.
- */
+
 export function getUpcomingTasks(
   tasks: Task[],
   limit?: number
@@ -920,19 +823,7 @@ export function getUpcomingTasks(
 const TASK_STORAGE_KEY =
   "orbit-tasks";
 
-/*
- * Bump this whenever the seed data in `initialTasks` changes in a way
- * that a returning user's persisted localStorage would otherwise mask
- * (e.g. the "Today" seed tasks' dueDate is derived from `new Date()` at
- * module load — a copy of them saved to localStorage on a previous day
- * is a fixed calendar date, not a rolling "today", so it silently drifts
- * into "Overdue" and disappears from the Today filter forever after).
- *
- * loadTasks() compares this against the version stamped in localStorage
- * on the last load; a mismatch (including "never stamped") means the
- * persisted tasks predate the current seed, so it discards them and
- * reseeds from `initialTasks` instead of trusting stale data.
- */
+
 const TASK_SEED_VERSION = 2;
 
 const TASK_SEED_VERSION_KEY =
@@ -948,13 +839,7 @@ const initialIsMilestoneById = new Map(
 );
 
 
-/*
- * Recovers a TaskComment from persisted JSON, tolerating the older
- * `{ authorLabel, timestamp }` shape (predating real author/createdAt)
- * that may still be sitting in a returning user's localStorage — so
- * old comments keep rendering instead of the whole task list
- * crashing on load.
- */
+
 function normalizeComment(
   raw: unknown
 ): TaskComment | null {
@@ -975,7 +860,7 @@ function normalizeComment(
     return null;
   }
 
-  /* Already the current shape. */
+  
   if (
     candidate.author &&
     typeof candidate.createdAt ===
@@ -998,7 +883,7 @@ function normalizeComment(
     };
   }
 
-  /* Legacy shape — synthesize an author + timestamp. */
+
   const label =
     candidate.authorLabel ??
     "Unknown";
@@ -1036,12 +921,7 @@ export function loadTasks(): Task[] {
       storedSeedVersion !==
       String(TASK_SEED_VERSION)
     ) {
-      /*
-       * Stale (or never-versioned) localStorage from before this seed
-       * revision — reset the stamp so this migration only runs once,
-       * and fall through to the freshly computed initialTasks below
-       * instead of the frozen dates sitting in TASK_STORAGE_KEY.
-       */
+      
       localStorage.setItem(
         TASK_SEED_VERSION_KEY,
         String(TASK_SEED_VERSION)

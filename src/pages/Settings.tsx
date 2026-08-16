@@ -10,9 +10,7 @@ import {
   type AppearanceSettings,
   type NotificationSettings,
   type OrbitSettings,
-  type ProfileSettings,
   type SecuritySettings,
-  type WorkspaceSettings,
 } from "../data/settingsData";
 
 import { ProfileSection } from "../components/settings/ProfileSection";
@@ -21,9 +19,7 @@ import { NotificationsSection } from "../components/settings/NotificationsSectio
 import { AppearanceSection } from "../components/settings/AppearanceSection";
 import { SecuritySection } from "../components/settings/SecuritySection";
 import { DangerZoneSection } from "../components/settings/DangerZoneSection";
-import { resolveCurrentMemberRole, canManageWorkspaceData } from "../data/teamData";
-import { useAuth } from "../context/AuthContext";
-import { canManageWorkspace, resolveEffectiveRole } from "../lib/permissions";
+import { useWorkspaceRole, isWorkspaceOwner } from "../hooks/useWorkspaceRole";
 
 /* ============================================================
    TABS
@@ -51,12 +47,13 @@ export default function Settings() {
   const accentHex = ACCENT_HEX[settings.appearance.accent];
 
   // Danger Zone wipes every member's data, not just the acting user's own
-  // — Admin only. Hidden from the tab list entirely (rather than shown
-  // with an empty panel) since every action inside it is gated the same
-  // way, matching ProjectSettingsTab's Lifecycle/Danger Zone sections.
-  const { role } = useAuth();
-  const canManageDanger =
-    canManageWorkspaceData(resolveCurrentMemberRole(role)) && canManageWorkspace(resolveEffectiveRole(role));
+  // — Owner only (Stage 6: real WorkspaceRole, matching
+  // DangerZoneSection.tsx's own gate exactly). Hidden from the tab list
+  // entirely (rather than shown with an empty panel) since every action
+  // inside it is gated the same way, matching ProjectSettingsTab's
+  // Lifecycle/Danger Zone sections.
+  const workspaceRole = useWorkspaceRole();
+  const canManageDanger = isWorkspaceOwner(workspaceRole);
   const visibleSections = useMemo(
     () => (canManageDanger ? SECTIONS : SECTIONS.filter((section) => section.key !== "danger")),
     [canManageDanger]
@@ -65,14 +62,6 @@ export default function Settings() {
   function persist(next: OrbitSettings) {
     setSettings(next);
     saveSettings(next);
-  }
-
-  function handleProfileSave(profile: ProfileSettings) {
-    persist({ ...settings, profile });
-  }
-
-  function handleWorkspaceSave(workspace: WorkspaceSettings) {
-    persist({ ...settings, workspace });
   }
 
   function handleNotificationsChange(notifications: NotificationSettings) {
@@ -149,11 +138,9 @@ export default function Settings() {
 
         {/* CONTENT */}
         <div className="flex flex-col" style={{ gap: 18, minWidth: 0 }}>
-          {activeSection === "profile" && <ProfileSection profile={settings.profile} onSave={handleProfileSave} />}
+          {activeSection === "profile" && <ProfileSection />}
 
-          {activeSection === "workspace" && (
-            <WorkspaceSection workspace={settings.workspace} onSave={handleWorkspaceSave} />
-          )}
+          {activeSection === "workspace" && <WorkspaceSection />}
 
           {activeSection === "notifications" && (
             <NotificationsSection

@@ -1,26 +1,12 @@
 import type { TeamMember } from "../types/dashboard";
 import type { AuthRole } from "../types/auth";
-import { hasRole } from "../lib/permissions";
+import type { WorkspaceMemberRecord, WorkspaceRole } from "../lib/workspaceApi";
 
-/* ============================================================
-   TYPES
-============================================================ */
 
 export type MemberStatus = "Active" | "Away" | "Offline" | "Invited";
 
-/** Reuses AuthRole (lib/permissions.ts's Role) directly rather than
- *  defining a separate vocabulary — a workspace member's roster role
- *  and the signed-in AuthContext role are the same 5 values (Owner,
- *  Admin, Project Manager, Member, Viewer). Kept as a local alias so
- *  call sites in this file and its consumers can keep saying
- *  "MemberRole" for the roster-specific meaning, without this module
- *  owning its own rank table (see canManageWorkspaceMembers() etc.
- *  below, which defer to lib/permissions.ts's hasRole()). */
 export type MemberRole = AuthRole;
 
-/** A workspace member shown on the Team page. Extends the lightweight
- *  TeamMember (initials/bg/fg) used for avatars elsewhere in the app, so a
- *  Member can be dropped anywhere a TeamMember is expected (AvatarStack, etc). */
 export interface Member extends TeamMember {
   id: string;
   name: string;
@@ -35,9 +21,6 @@ export interface Member extends TeamMember {
   tasksActive: number;
   tasksCompleted: number;
 }
-
-/** A team/department grouping. Membership is derived from
- *  Member.department rather than stored, so it never goes stale. */
 export interface OrbitTeam {
   id: string;
   name: string;
@@ -50,11 +33,6 @@ export interface TeamActivityEntry {
   text: string;
   timestamp: string;
 }
-
-/* ============================================================
-   TEAMS (DEPARTMENTS)
-============================================================ */
-
 export const teams: OrbitTeam[] = [
   {
     id: "product",
@@ -88,10 +66,6 @@ export const teams: OrbitTeam[] = [
   },
 ];
 
-/* ============================================================
-   AVATAR PALETTE
-============================================================ */
-
 const AVATAR_PALETTE: { bg: string; fg: string }[] = [
   { bg: "#AFC5DA", fg: "#20242B" },
   { bg: "#EEF2F6", fg: "#20242B" },
@@ -104,48 +78,12 @@ export function getAvatarColors(index: number): { bg: string; fg: string } {
   return AVATAR_PALETTE[index % AVATAR_PALETTE.length];
 }
 
-/* ============================================================
-   WORKSPACE ROLES
-   MemberRole is AuthRole, so rank ordering isn't redefined here —
-   lib/permissions.ts's hasRole() (built on its ROLE_RANK table) is
-   the single source of truth for that, same as it is for
-   AuthContext's role. This module only adds the roster-management
-   resource checks specific to the Team page. Team.tsx (and anywhere
-   else workspace-wide member management shows up) should gate
-   through canManageWorkspaceMembers() rather than comparing
-   MemberRole values directly.
-============================================================ */
 
-/** Invite, edit, remove workspace members, and change their roles — Admin and above. */
-export function canManageWorkspaceMembers(role: MemberRole): boolean {
-  return hasRole(role, "Admin");
-}
-
-/** Reset or permanently delete all workspace data (Settings > Danger Zone) — Admin and above, since it wipes every member's data, not just the acting user's own. Named separately from canManageWorkspaceMembers even though both currently resolve at the Admin rank, since they gate different actions that may not always need to move together. */
-export function canManageWorkspaceData(role: MemberRole): boolean {
-  return hasRole(role, "Admin");
-}
-
-/** Edit shared workspace settings (name, URL, timezone, date format, week start) in Settings > Workspace — Admin and above, since these apply to everyone in Orbit, not just the acting user. */
-export function canManageWorkspaceSettings(role: MemberRole): boolean {
-  return hasRole(role, "Admin");
-}
-
-/**
- * Resolves the current user's workspace-management role from
- * AuthContext's own `role` (pass `useAuth().role` in) rather than
- * looking anyone up in the roster — since MemberRole is AuthRole
- * (see above), AuthContext's authenticated identity already *is*
- * the answer, so there's nothing left to search for. Falls back to
- * "Viewer" (least privilege) rather than resolveEffectiveRole()'s
- * "Owner" default if somehow called while signed out, so a missing
- * session never silently grants management access — this function
- * gates real member-management actions, not permissions.ts's
- * pre-login demo pages.
- */
-export function resolveCurrentMemberRole(authRole: AuthRole | null | undefined): MemberRole {
-  return authRole ?? "Viewer";
-}
+// canManageWorkspaceMembers/canManageWorkspaceData/canManageWorkspaceSettings/
+// resolveCurrentMemberRole (mock AuthRole-based workspace-permission
+// checks) were removed in Stage 6 (Permissions Alignment) — every call
+// site now derives from the real WorkspaceRole instead (see
+// hooks/useWorkspaceRole.ts).
 
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -161,8 +99,82 @@ export function getInitials(name: string): string {
 }
 
 /* ============================================================
-   INITIAL MEMBERS
+   REAL WORKSPACE MEMBER MAPPING (Stage 1 — Real Team Roster)
+
+   Adapts a real WorkspaceMemberRecord (lib/workspaceApi.ts) onto the
+   existing Member shape so MemberCard/MemberRow/TeamsPanel/
+   MemberDetailsDrawer keep working completely unchanged — same
+   pattern as ProjectContext.tsx's mapProjectRecordToProject: map
+   what's real, and for the handful of fields the backend genuinely
+   has no column for, use an honest, clearly-reasoned value instead
+   of fabricating one:
+
+   - department: the backend has no team/department concept at all
+     (no Prisma model). Repurposed to show the member's real
+     WorkspaceRole (Owner/Admin/Member) in that same Pill/filter/
+     TeamsPanel-grouping slot instead — real data, not invented.
+   - status: always "Active". A WorkspaceMember row *is* full,
+     active membership — there's no "Invited"/"Away"/"Offline" state
+     in the data model, so "Active" is a true fact, not a guess.
+   - tasksActive/tasksCompleted: 0. Real task-assignee data isn't
+     wired yet (see the separate Task Assignees phase) — 0 reflects
+     that nothing is currently known to be assigned, not a fabricated
+     workload.
 ============================================================ */
+
+const WORKSPACE_ROLE_LABEL: Record<WorkspaceRole, MemberRole> = {
+  OWNER: "Owner",
+  ADMIN: "Admin",
+  MEMBER: "Member",
+};
+
+/** The 3 real WorkspaceRoles, shaped as OrbitTeam entries so the existing team/department UI (filter dropdown, TeamsPanel, MemberDetailsDrawer's "Team" select) can keep rendering `teams.map(...)` unchanged while actually listing roles. */
+export const WORKSPACE_ROLE_GROUPS: OrbitTeam[] = [
+  { id: "owner", name: "Owner", description: "Full control over this workspace." },
+  { id: "admin", name: "Admin", description: "Manages members and workspace settings." },
+  { id: "member", name: "Member", description: "Standard workspace access." },
+];
+
+/** The Role dropdown's valid options for a real member — the same 3 labels WORKSPACE_ROLE_GROUPS lists, kept as MemberRole values since that's what MemberDetailsDrawer's select already works in. */
+export const WORKSPACE_MEMBER_ROLE_OPTIONS: MemberRole[] = ["Owner", "Admin", "Member"];
+
+/** Reverse of WORKSPACE_ROLE_LABEL — MemberDetailsDrawer's Role select produces a MemberRole (AuthRole); saving a real member's role needs the WorkspaceRole PATCH .../members/:memberId actually accepts. Only ever called with one of WORKSPACE_MEMBER_ROLE_OPTIONS' 3 values. */
+export function memberRoleToWorkspaceRole(role: MemberRole): WorkspaceRole {
+  switch (role) {
+    case "Owner":
+      return "OWNER";
+    case "Admin":
+      return "ADMIN";
+    default:
+      return "MEMBER";
+  }
+}
+
+const NEUTRAL_MEMBER_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+
+export function mapWorkspaceMemberToMember(record: WorkspaceMemberRecord): Member {
+  const name = record.user.name ?? record.user.email;
+  const role = WORKSPACE_ROLE_LABEL[record.role as WorkspaceRole] ?? "Member";
+
+  return {
+    id: record.id,
+    name,
+    email: record.user.email,
+    jobTitle: record.user.jobTitle ?? "Team member",
+    department: role,
+    role,
+    status: "Active",
+    location: record.user.location ?? "—",
+    phone: record.user.phone ?? "—",
+    joinedDate: record.createdAt.slice(0, 10),
+    initials: getInitials(name),
+    bg: record.user.avatarBg ?? NEUTRAL_MEMBER_AVATAR.bg,
+    fg: record.user.avatarFg ?? NEUTRAL_MEMBER_AVATAR.fg,
+    tasksActive: 0,
+    tasksCompleted: 0,
+  };
+}
+
 
 export const initialMembers: Member[] = [
   {
@@ -341,48 +353,15 @@ export const initialMembers: Member[] = [
    INITIAL ACTIVITY
 ============================================================ */
 
-export const initialActivity: TeamActivityEntry[] = [
-  {
-    id: "activity-1",
-    memberId: "member-6",
-    text: "Priya Nair joined the Engineering team",
-    timestamp: "2 days ago",
-  },
-  {
-    id: "activity-2",
-    memberId: "member-3",
-    text: "Rhea Shah was promoted to Design Lead",
-    timestamp: "5 days ago",
-  },
-  {
-    id: "activity-3",
-    memberId: "member-8",
-    text: "Noor Malik joined the Engineering team",
-    timestamp: "1 week ago",
-  },
-  {
-    id: "activity-4",
-    memberId: "member-1",
-    text: "Maya Chen invited Wes Okafor to the workspace",
-    timestamp: "2 weeks ago",
-  },
-];
+// initialActivity/loadActivity/saveActivity/generateActivityId (fake
+// seed data + localStorage persistence for Team.tsx's ActivityFeed) were
+// removed in Stage 5 (Real Activity) — Team.tsx now fetches real events
+// from lib/workspaceActivityApi.ts instead.
 
-/* ============================================================
-   ID GENERATORS
-============================================================ */
 
-export function generateMemberId(): string {
-  return `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function generateActivityId(): string {
-  return `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/* ============================================================
-   DATE FORMATTING
-============================================================ */
+// generateMemberId (mock member-id generator, from before the Team.tsx
+// roster went real in Stage 1) has zero remaining callers — confirmed
+// via grep before removal.
 
 export function formatJoinedDate(dateStr: string): string {
   const date = new Date(`${dateStr}T00:00:00`);
@@ -397,10 +376,6 @@ export function formatJoinedDate(dateStr: string): string {
     year: "numeric",
   });
 }
-
-/* ============================================================
-   PERSISTENCE — MEMBERS
-============================================================ */
 
 const MEMBERS_STORAGE_KEY = "orbit-team-members";
 
@@ -425,45 +400,11 @@ export function loadMembers(): Member[] {
   }
 }
 
-export function saveMembers(members: Member[]): void {
-  try {
-    localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members));
-  } catch (error) {
-    console.error("Failed to save team members:", error);
-  }
-}
+// saveMembers has zero remaining callers — Team.tsx's own roster went
+// real in Stage 1 (mapWorkspaceMemberToMember), leaving loadMembers()
+// above as a read-only fallback identity source for resolveCurrentActor
+// elsewhere in the app (matches a real account's own data whenever the
+// email doesn't hit one of the 5 legacy seed accounts). Confirmed via
+// grep before removal.
 
-/* ============================================================
-   PERSISTENCE — ACTIVITY
-============================================================ */
 
-const ACTIVITY_STORAGE_KEY = "orbit-team-activity";
-
-export function loadActivity(): TeamActivityEntry[] {
-  try {
-    const stored = localStorage.getItem(ACTIVITY_STORAGE_KEY);
-
-    if (!stored) {
-      return initialActivity;
-    }
-
-    const parsed = JSON.parse(stored);
-
-    if (!Array.isArray(parsed)) {
-      return initialActivity;
-    }
-
-    return parsed as TeamActivityEntry[];
-  } catch (error) {
-    console.error("Failed to load team activity:", error);
-    return initialActivity;
-  }
-}
-
-export function saveActivity(activity: TeamActivityEntry[]): void {
-  try {
-    localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(activity));
-  } catch (error) {
-    console.error("Failed to save team activity:", error);
-  }
-}

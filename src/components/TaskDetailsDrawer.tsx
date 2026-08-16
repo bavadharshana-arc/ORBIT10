@@ -21,6 +21,8 @@ import type {
 } from "../data/taskData";
 
 import { formatRelativeTime } from "../data/workspaceData";
+import { getInitials } from "../data/teamData";
+import type { WorkspaceMemberRecord } from "../lib/workspaceApi";
 
 import { Avatar } from "../components/ui/Avatar";
 
@@ -36,24 +38,39 @@ export interface AssigneeOption {
 
 /* ================================================================
    ASSIGNEE HELPERS
+
+   buildAssigneeOptions (the mock team-record version) was removed once
+   its last caller migrated to buildWorkspaceAssigneeOptions below in
+   Stage 2 (Real Task Assignees) — confirmed via a zero-results grep.
 ================================================================ */
 
+const NEUTRAL_ASSIGNEE_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+
 /**
- * Converts the team object into options displayed
- * inside the task details drawer.
+ * Stage 2 (Real Task Assignees) — same AssigneeOption shape as
+ * buildAssigneeOptions above, but sourced from the real workspace
+ * roster (TaskContext's workspaceMembers, itself from Stage 1's
+ * listWorkspaceMembers) instead of the mock team record. Critically,
+ * `key` here is the option's real userId — exactly what
+ * task.controller.ts's assigneeId column expects, so a selection from
+ * this picker can be sent straight through, unlike buildAssigneeOptions'
+ * keys (mock team-record labels with no backend meaning at all).
  */
-export function buildAssigneeOptions(
-  teamRecord: Record<string, TeamMember>
+export function buildWorkspaceAssigneeOptions(
+  members: WorkspaceMemberRecord[]
 ): AssigneeOption[] {
-  return Object.entries(teamRecord).map(
-    ([key, member]) => ({
-      key,
-      label:
-        key.charAt(0).toUpperCase() +
-        key.slice(1),
-      member,
-    })
-  );
+  return members.map((member) => {
+    const name = member.user.name ?? member.user.email;
+    return {
+      key: member.userId,
+      label: name,
+      member: {
+        initials: getInitials(name),
+        bg: member.user.avatarBg ?? NEUTRAL_ASSIGNEE_AVATAR.bg,
+        fg: member.user.avatarFg ?? NEUTRAL_ASSIGNEE_AVATAR.fg,
+      },
+    };
+  });
 }
 
 /**
@@ -436,6 +453,12 @@ interface TaskDetailsDrawerProps {
     commentId: string
   ) => void;
 
+  /** True while this task's real comments are being fetched (Phase 27) — defaults to false so callers that don't pass it (none should exist, but kept optional to avoid a breaking prop) keep today's behavior. */
+  commentsLoading?: boolean;
+
+  /** Set on a genuine comment load/save failure — surfaced here rather than silently falling back to whatever was already in `task.comments`. */
+  commentsError?: string | null;
+
   onDelete: () => void;
 }
 
@@ -457,6 +480,8 @@ export function TaskDetailsDrawer({
   onAddComment,
   onEditComment,
   onDeleteComment,
+  commentsLoading = false,
+  commentsError = null,
   onDelete,
 }: TaskDetailsDrawerProps) {
   /* ============================================================
@@ -1322,7 +1347,13 @@ export function TaskDetailsDrawer({
               marginBottom: 10,
             }}
           >
-            {task.comments
+            {commentsLoading ? (
+              <p className="text-ink-3" style={{ fontSize: 12 }}>
+                Loading comments…
+              </p>
+            ) : commentsError ? (
+              <p style={{ fontSize: 12, color: "#B3564B" }}>{commentsError}</p>
+            ) : task.comments
               .length === 0 ? (
               <p
                 className="text-ink-3"
