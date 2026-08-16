@@ -1,0 +1,14 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/src/generated/prisma
+
+# Compiled TypeScript output — outDir is unset in tsconfig.json, so tsc
+# compiles in place next to each .ts source (src/**, prisma.config.ts,
+# prisma/seed.ts). Build artifacts, not source; regenerate with
+# `npm run build`.
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map

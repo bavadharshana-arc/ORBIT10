@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  password                String
+  name                    String?
+  // Phase 18 (self-service profile, approved scope): all nullable — an
+  // existing row (or a freshly registered one) has none of these set
+  // until the user visits Settings -> Profile and saves. avatarBg/avatarFg
+  // are free-form hex strings validated at the controller against the
+  // fixed palette client/src/data/settingsData.ts's AVATAR_COLOR_OPTIONS
+  // defines, not against an enum here, so the palette can change without
+  // a migration.
+  jobTitle                String?
+  phone                   String?
+  location                String?
+  bio                     String?
+  avatarBg                String?
+  avatarFg                String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  workspaceMembers        WorkspaceMember[]
+  assignedTasks           Task[]
+  taskComments            TaskComment[]
+  projectMembers          ProjectMember[]
+  discussions             Discussion[]
+  discussionReplies       DiscussionReply[]
+  discussionReactions     DiscussionReaction[]
+  activityEvents          ActivityEvent[]
+  workspaceActivityEvents WorkspaceActivityEvent[]
+  uploadedFiles           ProjectFile[]
+  notificationsReceived   Notification[]          @relation("NotificationRecipient")
+  notificationsActedOn    Notification[]          @relation("NotificationActor")
+}
+
+model Workspace {
+  id               String                   @id @default(cuid())
+  name             String
+  // Phase 19 (workspace settings, approved scope): nullable, mirroring
+  // Phase 18's User profile fields — an existing workspace has none of
+  // these set until an OWNER/ADMIN visits Settings -> Workspace and
+  // saves. slug/timezone/dateFormat/weekStart are validated at the
+  // controller against fixed option sets (dateFormat/weekStart) or a
+  // format pattern (slug), not modeled as Prisma enums here — matching
+  // how Task.status/WorkspaceMember.role are already plain strings
+  // validated in code rather than DB enums in this codebase.
+  slug             String?
+  timezone         String?
+  dateFormat       String?
+  weekStart        String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  projects         Project[]
+  workspaceMembers WorkspaceMember[]
+  activityEvents   WorkspaceActivityEvent[]
+}
+
+model Project {
+  id             String             @id @default(cuid())
+  name           String
+  description    String?
+  workspaceId    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  projectMembers ProjectMember[]
+  objectives     ProjectObjective[]
+  milestones     ProjectMilestone[]
+  discussions    Discussion[]
+  activityEvents ActivityEvent[]
+  files          ProjectFile[]
+}
+
+model Task {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  status      String?
+  priority    String?
+  assigneeId  String?
+  dueDate     DateTime?
+  projectId   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?         @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  comments    TaskComment[]
+}
+
+model TaskComment {
+  id        String    @id @default(cuid())
+  text      String
+  taskId    String
+  authorId  String
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  role      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model ProjectObjective {
+  id        String   @id @default(cuid())
+  text      String
+  done      Boolean  @default(false)
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectMilestone {
+  id        String    @id @default(cuid())
+  title     String
+  done      Boolean   @default(false)
+  dueDate   DateTime?
+  projectId String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Discussion {
+  id        String   @id @default(cuid())
+  projectId String
+  type      String
+  body      String
+  authorId  String
+  pinned    Boolean  @default(false)
+  mentions  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author      User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replies     DiscussionReply[]
+  reactions   DiscussionReaction[]
+  attachments DiscussionAttachment[]
+}
+
+model DiscussionReply {
+  id           String   @id @default(cuid())
+  discussionId String
+  authorId     String
+  text         String
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model DiscussionReaction {
+  id           String   @id @default(cuid())
+  discussionId String
+  userId       String
+  emoji        String
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([discussionId, userId, emoji])
+}
+
+model DiscussionAttachment {
+  id           String   @id @default(cuid())
+  discussionId String
+  fileId       String
+  createdAt    DateTime @default(now())
+
+  discussion Discussion  @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  file       ProjectFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([discussionId, fileId])
+}
+
+model ActivityEvent {
+  id        String   @id @default(cuid())
+  projectId String
+  type      String
+  text      String
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model WorkspaceActivityEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  memberId    String?
+  text        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    User?     @relation(fields: [memberId], references: [id], onDelete: SetNull)
+}
+
+model ProjectFile {
+  id         String   @id @default(cuid())
+  projectId  String
+  name       String
+  extension  String
+  kind       String
+  sizeBytes  Int
+  folder     String
+  uploaderId String?
+  createdAt  DateTime @default(now())
+
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader    User?                  @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+  attachments DiscussionAttachment[]
+}
+
+// Phase 17 (CRUD-only, approved scope): recipient-scoped, not
+// workspace/project-scoped like every other model above — a
+// notification belongs to the user who receives it, not to a
+// workspace. `actorId` mirrors ActivityEvent.actorId /
+// WorkspaceActivityEvent.memberId (nullable, SetNull) for future
+// trigger-wiring compatibility, but the Phase 17 API never sets it —
+// there are no automatic triggers yet, only self-service create.
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  actorId     String?
+  type        String
+  title       String
+  message     String
+  actionHref  String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+}
