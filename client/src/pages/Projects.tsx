@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Plus, FolderOpen } from "lucide-react";
 
-import type { Project } from "../types/dashboard";
+import type { Project, TeamMember } from "../types/dashboard";
 import { getDueGroup } from "../data/taskData";
 import { Pill } from "../components/ui/Pill";
 import { AvatarStack } from "../components/ui/AvatarStack";
@@ -20,7 +20,7 @@ import {
 import { CreateProjectDrawer, type CreateProjectValues } from "../components/CreateProjectDrawer";
 import { ProjectActionsMenu } from "../components/projects/ProjectActionsMenu";
 import { ConfirmDangerModal } from "../components/settings/ConfirmDangerModal";
-import { loadMembers } from "../data/teamData";
+import { loadMembers, mapProjectMemberToTeamMember } from "../data/teamData";
 import { resolveCurrentActor } from "../data/workspaceData";
 import { notifyProjectCreated } from "../data/systemNotifications";
 import { useNotificationContext } from "../context/notificationContextValue";
@@ -44,6 +44,8 @@ interface ProjectTaskCounts {
 
 interface ProjectCardProps {
   project: Project;
+  /** This project's real roster (ProjectContext's projectMembersByProjectId), mapped to display avatars — replaces the old local-only Project.people field. */
+  people: TeamMember[];
   taskCounts: ProjectTaskCounts;
   canManage: boolean;
   onSelect: () => void;
@@ -55,7 +57,7 @@ interface ProjectCardProps {
   onDelete: () => void;
 }
 
-function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onToggleMenu, onEdit, onDuplicate, onArchive, onDelete }: ProjectCardProps) {
+function ProjectCard({ project, people, taskCounts, canManage, onSelect, isMenuOpen, onToggleMenu, onEdit, onDuplicate, onArchive, onDelete }: ProjectCardProps) {
   const status = getProjectStatus(project);
   const statusMeta = PROJECT_STATUS_META[status];
 
@@ -128,7 +130,7 @@ function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onT
       </div>
 
       <div className="flex items-center justify-between">
-        <AvatarStack people={project.people} />
+        <AvatarStack people={people} />
         <span className="text-ink-3" style={{ fontSize: 11.5, fontWeight: 600 }}>
           {project.progress}%
         </span>
@@ -171,7 +173,14 @@ export default function Projects() {
   const navigate = useNavigate();
 
   const { tasks, setTasks, workspaceMembers } = useTaskContext();
-  const { projects, setProjects, isLoading: projectsLoading, error: projectsError } = useProjectContext();
+  const {
+    projects,
+    setProjects,
+    isLoading: projectsLoading,
+    error: projectsError,
+    projectMembersByProjectId,
+    addProjectMember,
+  } = useProjectContext();
   const { currentWorkspaceId } = useWorkspace();
   const { addNotification } = useNotificationContext();
   const members = useMemo(() => loadMembers(), []);
@@ -191,12 +200,16 @@ export default function Projects() {
     return canCreate;
   };
 
-  // Phase 25: creates the real backend Project (name/description are the
-  // only columns it has), then builds the frontend Project by merging
-  // that real record with the cosmetic fields (tag/color/dates/people)
-  // the backend doesn't store — same shape buildNewProject() used to
-  // build entirely locally, now anchored to a real id/createdAt instead
-  // of a client-generated one.
+  // Phase 25: creates the real backend Project. Phase 19 Frontend
+  // Integration audit fix (Priority 8): tag/color/startDate/dueDate are
+  // real, persisted columns (sent straight through). Phase 19 follow-up
+  // (Persist Project people): membership is real too — the backend
+  // auto-adds the creator as Owner, and each other selected workspace
+  // member is added for real via the same ProjectMember API
+  // ProjectTeamTab.tsx uses (default role "Viewer", same as that tab's
+  // own add-member default), through ProjectContext's addProjectMember
+  // so its shared projectMembersByProjectId map picks the new project up
+  // immediately — no separate local `people` field to keep in sync.
   async function handleCreateProject(values: CreateProjectValues) {
     if (!canCreate || !currentWorkspaceId) return;
 
@@ -206,26 +219,45 @@ export default function Projects() {
       const record = await createProjectRequest(currentWorkspaceId, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       const newProject: Project = {
         id: record.id,
         name: record.name,
-        tag: values.tag,
+        tag: record.tag ?? "",
         progress: 0,
         tasks: "0 / 0 tasks",
-        due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-        people: values.people,
+        due: dueDate ? formatProjectDue(dueDate) : "No due date",
         description: record.description ?? undefined,
-        color: values.color,
-        startDate: values.startDate || undefined,
-        dueDate: values.dueDate || undefined,
+        color: record.color ?? undefined,
+        startDate: record.startDate?.slice(0, 10),
+        dueDate,
         createdAt: record.createdAt,
         memberRoles: { [currentActor.initials]: "Owner" },
       };
 
       setProjects((current) => [newProject, ...current]);
       setIsCreateDrawerOpen(false);
+
+      // Best-effort — the project itself already exists by this point;
+      // one failed add shouldn't roll back project creation or block the
+      // others. A failed add just means that person isn't on the project
+      // yet, same recoverable state as if the creator forgot to select
+      // them (they can still be added from the Team tab).
+      const otherMemberIds = values.memberUserIds.filter((id) => id !== user?.id);
+      await Promise.all(
+        otherMemberIds.map((userId) =>
+          addProjectMember(newProject.id, userId, "Viewer").catch((error: unknown) =>
+            console.error("Couldn't add project member:", error),
+          ),
+        ),
+      );
 
       notifyProjectCreated(addNotification, {
         projectName: newProject.name,
@@ -246,13 +278,19 @@ export default function Projects() {
     setMutationError(null);
 
     try {
-      // Only name/description are real columns — everything else below
-      // stays a local-only field on top of the real record, same as
-      // creation.
+      // Every field below is a real, persisted column (Phase 19 audit fix,
+      // Priority 8). Membership isn't edited here — see
+      // CreateProjectDrawer.tsx's doc comment on memberUserIds.
       const record = await updateProjectRequest(currentWorkspaceId, editingProject.id, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       setProjects((current) =>
         current.map((project) =>
@@ -260,13 +298,12 @@ export default function Projects() {
             ? {
                 ...project,
                 name: record.name,
-                tag: values.tag,
+                tag: record.tag ?? "",
                 description: record.description ?? undefined,
-                color: values.color,
-                startDate: values.startDate || undefined,
-                dueDate: values.dueDate || undefined,
-                due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-                people: values.people,
+                color: record.color ?? undefined,
+                startDate: record.startDate?.slice(0, 10),
+                dueDate,
+                due: dueDate ? formatProjectDue(dueDate) : "No due date",
               }
             : project
         )
@@ -503,6 +540,7 @@ export default function Projects() {
             <ProjectCard
               key={project.id}
               project={project}
+              people={(projectMembersByProjectId[project.id] ?? []).map(mapProjectMemberToTeamMember)}
               taskCounts={
                 taskCountsByProject.get(project.name) ?? {
                   completed: 0,
@@ -533,6 +571,7 @@ export default function Projects() {
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
         onCreate={handleCreateProject}
+        workspaceMembers={workspaceMembers.filter((member) => member.userId !== user?.id)}
       />
 
       <CreateProjectDrawer

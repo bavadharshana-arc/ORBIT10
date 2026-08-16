@@ -43,7 +43,11 @@ export interface Project {
   progress: number;
   tasks: string;
   due: string;
-  people: TeamMember[];
+  // `people` (a local-only TeamMember[] avatar list) was removed in the
+  // Phase 19 Frontend Integration follow-up — real project membership
+  // now comes exclusively from ProjectContext's projectMembersByProjectId
+  // (backed by the real ProjectMember API), not a field stored on
+  // Project itself. See ProjectContext.tsx's doc comment.
   /** Optional — not set on the original seed projects. */
   description?: string;
   /** Optional accent color (hex) chosen when the project is created. */

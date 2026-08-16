@@ -23,7 +23,6 @@ import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/workspaceContextValue";
 import {
-  getProjectActors,
   resolveCurrentActor,
   formatRelativeTime,
   formatFileSize,
@@ -592,14 +591,32 @@ function mapDiscussion(
 type TypeFilter = "all" | DiscussionType;
 
 export function ProjectDiscussionsTab() {
-  const { project, permission } = useProjectWorkspace();
+  const { project, permission, projectMembers } = useProjectWorkspace();
   const canEdit = canEditProjectContent(permission);
   const canComment = canCommentOnProject(permission);
   const members = useMemo(() => loadMembers(), []);
   const { user } = useAuth();
-  const actors = useMemo(() => getProjectActors(project, members), [project, members]);
-  const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
+  // Real project roster (Phase 19 Frontend Integration follow-up:
+  // Persist Project people) — replaces the old getProjectActors, which
+  // fuzzy-matched a local-only Project.people field against the mock
+  // `members` list above (`members`/resolveCurrentActor below are
+  // unrelated: that's "who am I", not "who's on this project").
+  const actors = useMemo<WorkspaceActor[]>(
+    () =>
+      projectMembers.map((record) => {
+        const name = record.user.name ?? record.user.email;
+        return {
+          id: record.userId,
+          name,
+          initials: getInitials(name),
+          bg: record.user.avatarBg ?? "#AFC5DA",
+          fg: record.user.avatarFg ?? "#20242B",
+        };
+      }),
+    [projectMembers],
+  );
   const actorNames = useMemo(() => actors.map((a) => a.name), [actors]);
+  const currentActor = useMemo(() => resolveCurrentActor(members, user), [members, user]);
 
   const { currentWorkspaceId } = useWorkspace();
 

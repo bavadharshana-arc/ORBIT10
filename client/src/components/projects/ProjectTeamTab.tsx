@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Users, Crown, Gauge, ChevronDown, X } from "lucide-react";
 
 import { mapWorkspaceMemberToMember, getInitials, type Member } from "../../data/teamData";
@@ -8,29 +8,26 @@ import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/workspaceContextValue";
 import { getMemberWorkload, PROJECT_PERMISSIONS, canManageProject } from "../../data/workspaceData";
 import { ApiError } from "../../lib/api";
-import {
-  listProjectMembers,
-  addProjectMember,
-  updateProjectMemberRole,
-  removeProjectMember,
-  type ProjectMemberRecord,
-  type ProjectMemberRole,
-} from "../../lib/projectMemberApi";
+import type { ProjectMemberRecord, ProjectMemberRole } from "../../lib/projectMemberApi";
 import { createActivityEvent } from "../../lib/activityApi";
 import { StatCard } from "../dashboard/StatCard";
 import { Avatar } from "../ui/Avatar";
 import { ProjectAddMemberMenu } from "./ProjectAddMemberMenu";
 
 /* ============================================================
-   PROJECT TEAM TAB (Stage 6 — Permissions Alignment)
+   PROJECT TEAM TAB (Stage 6 — Permissions Alignment; refactored in the
+   Phase 19 Frontend Integration follow-up, Persist Project people)
 
-   Add/remove/role-change now call the real ProjectMember CRUD API
-   (projectMember.routes.ts — the write endpoints always existed on
-   the backend, just unwired on the frontend until now; see
-   lib/projectMemberApi.ts's doc comment). This roster is also what
-   ProjectWorkspace.tsx's real `permission` is derived from — without
-   a real way to add someone here, only each project's original
-   creator would ever have any project-level access.
+   Add/remove/role-change call the real ProjectMember CRUD API
+   (projectMember.routes.ts — the write endpoints always existed on the
+   backend, just unwired on the frontend until Stage 6; see
+   lib/projectMemberApi.ts's doc comment). The roster itself now comes
+   from ProjectWorkspace.tsx's shared `projectMembers` (backed by
+   ProjectContext's single fetch) instead of this tab fetching its own
+   separate copy — the same data ProjectWorkspace.tsx's real
+   `permission`, ProjectOverviewTab's "Team members" card, and
+   ProjectAnalyticsTab's workload rows all now read, so there's exactly
+   one source of truth for project membership.
 ============================================================ */
 
 function MemberCard({
@@ -107,7 +104,17 @@ function MemberCard({
 }
 
 export function ProjectTeamTab() {
-  const { project, projectTasks, permission } = useProjectWorkspace();
+  const {
+    project,
+    projectTasks,
+    permission,
+    projectMembers: memberRecords,
+    projectMembersLoading: membersLoading,
+    projectMembersError: membersError,
+    addProjectMember,
+    removeProjectMember,
+    updateProjectMemberRole,
+  } = useProjectWorkspace();
   // Owner only — matches POST/PATCH/DELETE .../members's real gate
   // (requireProjectRole("Owner"), projectMember.routes.ts).
   const canManage = canManageProject(permission);
@@ -115,42 +122,7 @@ export function ProjectTeamTab() {
   const { workspaceMembers } = useTaskContext();
   const { user } = useAuth();
 
-  const [memberRecords, setMemberRecords] = useState<ProjectMemberRecord[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
-  const [membersError, setMembersError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.resolve()
-      .then(() => {
-        if (cancelled || !currentWorkspaceId) return null;
-        setMembersLoading(true);
-        setMembersError(null);
-        return listProjectMembers(currentWorkspaceId, project.id);
-      })
-      .then((fetched) => {
-        if (cancelled) return;
-        if (!currentWorkspaceId || !fetched) {
-          setMemberRecords([]);
-          return;
-        }
-        setMemberRecords(fetched);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setMemberRecords([]);
-        setMembersError(err instanceof ApiError ? err.message : "Couldn't load project members. Try again in a moment.");
-      })
-      .finally(() => {
-        if (!cancelled) setMembersLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentWorkspaceId, project.id]);
 
   // Real workspace members not already on this project — offered as
   // add-candidates. mapWorkspaceMemberToMember reused unchanged so
@@ -172,7 +144,7 @@ export function ProjectTeamTab() {
   }
 
   async function handleAdd(candidate: Member) {
-    if (!canManage || !currentWorkspaceId) return;
+    if (!canManage) return;
     // candidate.id is the WorkspaceMember row id (mapWorkspaceMemberToMember)
     // — resolve it back to the real userId addProjectMember needs.
     const workspaceMember = workspaceMembers.find((member) => member.id === candidate.id);
@@ -180,8 +152,7 @@ export function ProjectTeamTab() {
 
     setMutationError(null);
     try {
-      const record = await addProjectMember(currentWorkspaceId, project.id, workspaceMember.userId, "Viewer");
-      setMemberRecords((current) => [...current, record]);
+      await addProjectMember(workspaceMember.userId, "Viewer");
       logActivity("member_added", `${candidate.name} was added to the project`);
     } catch (error) {
       setMutationError(error instanceof ApiError ? error.message : "Couldn't add that member. Try again.");
@@ -189,12 +160,11 @@ export function ProjectTeamTab() {
   }
 
   async function handleRemove(record: ProjectMemberRecord) {
-    if (!canManage || !currentWorkspaceId) return;
+    if (!canManage) return;
 
     setMutationError(null);
     try {
-      await removeProjectMember(currentWorkspaceId, project.id, record.id);
-      setMemberRecords((current) => current.filter((candidate) => candidate.id !== record.id));
+      await removeProjectMember(record.id);
       logActivity("member_removed", `${record.user.name ?? record.user.email} was removed from the project`);
     } catch (error) {
       setMutationError(error instanceof ApiError ? error.message : "Couldn't remove that member. Try again.");
@@ -202,12 +172,11 @@ export function ProjectTeamTab() {
   }
 
   async function handlePermissionChange(record: ProjectMemberRecord, role: ProjectMemberRole) {
-    if (!canManage || !currentWorkspaceId) return;
+    if (!canManage) return;
 
     setMutationError(null);
     try {
-      const updated = await updateProjectMemberRole(currentWorkspaceId, project.id, record.id, role);
-      setMemberRecords((current) => current.map((candidate) => (candidate.id === record.id ? updated : candidate)));
+      await updateProjectMemberRole(record.id, role);
     } catch (error) {
       setMutationError(error instanceof ApiError ? error.message : "Couldn't update that member's role. Try again.");
     }

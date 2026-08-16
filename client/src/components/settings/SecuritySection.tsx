@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Eye, EyeOff, KeyRound, Laptop, LogOut, ShieldCheck, Smartphone } from "lucide-react";
 
 import { formatSettingsDate, type SecuritySettings } from "../../data/settingsData";
+import { changeMyPassword } from "../../lib/userApi";
+import { ApiError } from "../../lib/api";
 import { Pill } from "../ui/Pill";
 import { Field, SavedBadge, SectionCard, ToggleRow } from "./shared";
 import { inputStyle, primaryButtonStyle, secondaryButtonStyle } from "./styles";
@@ -19,10 +21,11 @@ export function SecuritySection({ security, accent, onChange }: SecuritySectionP
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [saved, flashSaved] = useSavedFlash();
 
-  function handleChangePassword() {
+  async function handleChangePassword() {
     if (!currentPassword) {
       setError("Enter your current password.");
       return;
@@ -38,13 +41,26 @@ export function SecuritySection({ security, accent, onChange }: SecuritySectionP
       return;
     }
 
-    onChange({ ...security, passwordUpdatedAt: new Date().toISOString() });
-
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
     setError(null);
-    flashSaved();
+    setSubmitting(true);
+
+    try {
+      // Phase 19 Frontend Integration audit fix (Priority 2): a real
+      // change, verified server-side against the current password hash
+      // — see user.controller.ts's changeMyPassword.
+      await changeMyPassword(currentPassword, newPassword);
+
+      onChange({ ...security, passwordUpdatedAt: new Date().toISOString() });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      flashSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't update your password. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleSignOutSession(id: string) {
@@ -112,8 +128,8 @@ export function SecuritySection({ security, accent, onChange }: SecuritySectionP
           {error && <span style={{ fontSize: 11, color: "#B3564B" }}>{error}</span>}
 
           <div className="flex items-center" style={{ gap: 10 }}>
-            <button type="button" onClick={handleChangePassword} className="lift" style={primaryButtonStyle}>
-              Update password
+            <button type="button" onClick={handleChangePassword} disabled={submitting} className="lift" style={primaryButtonStyle}>
+              {submitting ? "Updating…" : "Update password"}
             </button>
 
             <SavedBadge visible={saved} />

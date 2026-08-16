@@ -105,3 +105,64 @@ export const updateMe = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * PATCH /api/users/me/password — Settings -> Security's "Update
+ * password". Always writes to req.userId, same self-service guarantee
+ * as updateMe above.
+ */
+export const changeMyPassword = async (req: Request, res: Response) => {
+  if (!req.userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  const { currentPassword, newPassword } = req.body ?? {};
+
+  if (!currentPassword || typeof currentPassword !== "string") {
+    return res.status(400).json({ error: "currentPassword is required" });
+  }
+
+  if (!newPassword || typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
+
+  try {
+    await userService.changePassword(req.userId, currentPassword, newPassword);
+    return res.status(200).json({ message: "Password updated." });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Current password is incorrect") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error instanceof Error && error.message === "User not found") {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
+ * DELETE /api/users/me — Settings -> Danger Zone's "Delete account".
+ * Self-service only (req.userId), and refused for the permanent demo
+ * accounts (see user.service.ts's isProtectedDemoEmail) so the seeded
+ * Demo Workspace can't be deleted out from under every other visitor.
+ */
+export const deleteMe = async (req: Request, res: Response) => {
+  if (!req.userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    await userService.deleteOwnAccount(req.userId);
+    return res.status(204).send();
+  } catch (error) {
+    if (error instanceof Error && error.message === "Demo accounts can't be deleted") {
+      return res.status(403).json({ error: error.message });
+    }
+    if (error instanceof Error && error.message === "User not found") {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

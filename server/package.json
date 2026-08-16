@@ -8,7 +8,9 @@
     "db": "prisma dev",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "prisma db seed",
+    "test": "tsx --test --test-concurrency=1 src/__tests__/*.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +22,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^9.0.5",
     "pg": "^8.23.0",
     "prisma": "^7.9.1"
   },
@@ -29,6 +32,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.2.0",
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
   }

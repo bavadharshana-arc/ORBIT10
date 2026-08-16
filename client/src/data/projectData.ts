@@ -1,4 +1,4 @@
-import type { Project, ProjectStatus, TeamMember } from "../types/dashboard";
+import type { Project, ProjectStatus } from "../types/dashboard";
 import { getDueGroup } from "./taskData";
 
 
@@ -82,34 +82,14 @@ export function formatProjectDue(dueDate: string): string {
 
 
 
-export interface NewProjectInput {
-  name: string;
-  description: string;
-  tag: string;
-  color: string;
-  startDate: string;
-  dueDate: string;
-  people: TeamMember[];
-}
-
-export function buildNewProject(values: NewProjectInput, creatorInitials: string): Project {
-  return {
-    id: generateProjectId(),
-    name: values.name,
-    tag: values.tag,
-    progress: 0,
-    tasks: "0 / 0 tasks",
-    due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-    people: values.people,
-    description: values.description || undefined,
-    color: values.color,
-    startDate: values.startDate || undefined,
-    dueDate: values.dueDate || undefined,
-    memberRoles: { [creatorInitials]: "Owner" },
-  };
-}
-
-
+// NewProjectInput/buildNewProject (a fully local project builder, from
+// before project creation went real) were removed in the Phase 19
+// Frontend Integration follow-up (Persist Project people) — zero
+// remaining callers (Projects.tsx/ProjectsWidget.tsx build their new
+// Project from the real createProject response instead; see their own
+// handleCreateProject), and buildNewProject's own `people` field
+// referenced the now-removed local-only Project.people. Confirmed via
+// grep before removal.
 
 export function generateProjectId(): string {
   return `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

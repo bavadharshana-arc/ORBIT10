@@ -1,19 +1,16 @@
-import { useMemo } from "react";
-import { Info, Users, Archive, ArchiveRestore, Copy, TriangleAlert, Check, Trash2 } from "lucide-react";
+import { Info, Users, Archive, ArchiveRestore, Copy, TriangleAlert, Check, Trash2, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
-import { loadMembers } from "../../data/teamData";
 import { PROJECT_COLORS, PROJECT_TAGS } from "../../data/projectData";
-import { matchMember } from "../../data/workspaceData";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useProjectContext } from "../../context/projectContextValue";
 import { SectionCard, Field } from "../settings/shared";
 import { primaryButtonStyle, secondaryButtonStyle } from "../settings/styles";
-import { Avatar } from "../ui/Avatar";
 import { Pill } from "../ui/Pill";
-import { ProjectAddMemberMenu } from "./ProjectAddMemberMenu";
 
 export function ProjectSettingsTab() {
-  const { project, isArchived, openEditDrawer, openDeleteModal, duplicateProject, archiveProject, canManageProjectEntity } = useProjectWorkspace();
+  const { project, isArchived, openEditDrawer, openDeleteModal, duplicateProject, archiveProject, canManageProjectEntity, projectMembers } =
+    useProjectWorkspace();
   // Stage 6 (Permissions Alignment): edit/duplicate/archive/delete are
   // all project-*entity* actions — real WorkspaceRole-gated
   // (requireWorkspaceRole("OWNER", "ADMIN"), project.routes.ts), not
@@ -21,33 +18,10 @@ export function ProjectSettingsTab() {
   // on canManageProjectEntity.
   const canManage = canManageProjectEntity;
   const { setProjects } = useProjectContext();
-  const allMembers = useMemo(() => loadMembers(), []);
-
-  const resolvedMembers = useMemo(
-    () => project.people.map((person) => ({ person, matched: matchMember(person, allMembers) })),
-    [project.people, allMembers]
-  );
-
-  const candidates = useMemo(
-    () => allMembers.filter((member) => !project.people.some((person) => person.initials === member.initials && person.bg === member.bg)),
-    [allMembers, project.people]
-  );
 
   function setColor(color: string) {
     if (!canManage) return;
     setProjects((current) => current.map((p) => (p.id === project.id ? { ...p, color } : p)));
-  }
-
-  function addMember(member: (typeof allMembers)[number]) {
-    if (!canManage) return;
-    setProjects((current) =>
-      current.map((p) => (p.id === project.id ? { ...p, people: [...p.people, { initials: member.initials, bg: member.bg, fg: member.fg }] } : p))
-    );
-  }
-
-  function removeMember(person: (typeof project.people)[number]) {
-    if (!canManage) return;
-    setProjects((current) => current.map((p) => (p.id === project.id ? { ...p, people: p.people.filter((candidate) => candidate !== person) } : p)));
   }
 
   function unarchive() {
@@ -115,38 +89,24 @@ export function ProjectSettingsTab() {
         </div>
       </SectionCard>
 
-      {/* MEMBERS */}
+      {/* MEMBERS — real roster (ProjectContext's projectMembersByProjectId),
+          same data the Team tab manages. This card is read-only and
+          points there instead of duplicating its own add/remove UI, so
+          there's exactly one place that actually mutates project
+          membership (Phase 19 Frontend Integration follow-up: Persist
+          Project people). */}
       <SectionCard icon={Users} title="Members" description="Who has access to this project.">
-        <div className="flex flex-col" style={{ gap: 12 }}>
-          <div className="flex items-center justify-between">
-            <span className="text-ink-3" style={{ fontSize: 11.5 }}>{project.people.length} member{project.people.length === 1 ? "" : "s"}</span>
-            {canManage && <ProjectAddMemberMenu candidates={candidates} onAdd={addMember} />}
-          </div>
-
-          {resolvedMembers.length === 0 ? (
-            <p className="text-ink-3" style={{ fontSize: 12 }}>No members yet.</p>
-          ) : (
-            <div className="flex flex-col" style={{ gap: 6 }}>
-              {resolvedMembers.map(({ person, matched }, index) => (
-                <div key={`${person.initials}-${index}`} className="flex items-center" style={{ gap: 10, padding: "8px 10px", borderRadius: 10, background: "var(--surface-2)" }}>
-                  <Avatar initials={person.initials} bg={person.bg} fg={person.fg} size={28} />
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {matched?.name ?? person.initials}
-                  </span>
-                  {canManage && (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${matched?.name ?? person.initials}`}
-                      onClick={() => removeMember(person)}
-                      style={{ border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center justify-between flex-wrap" style={{ gap: 12 }}>
+          <span className="text-ink-3" style={{ fontSize: 11.5 }}>
+            {projectMembers.length} member{projectMembers.length === 1 ? "" : "s"}
+          </span>
+          <Link
+            to={`/projects/${project.id}/team`}
+            className="flex items-center"
+            style={{ gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text)", textDecoration: "none" }}
+          >
+            Manage on the Team tab <ArrowRight size={13} />
+          </Link>
         </div>
       </SectionCard>
 

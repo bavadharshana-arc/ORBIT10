@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { X, CalendarDays, Check } from "lucide-react";
 
-import { loadMembers } from "../data/teamData";
+import { getInitials } from "../data/teamData";
 import { PROJECT_COLORS, PROJECT_TAGS, DEFAULT_PROJECT_COLOR } from "../data/projectData";
-import type { Project, TeamMember } from "../types/dashboard";
+import type { Project } from "../types/dashboard";
+import type { WorkspaceMemberRecord } from "../lib/workspaceApi";
 
 /* ============================================================
    TYPES
@@ -16,7 +17,17 @@ export interface CreateProjectValues {
   color: string;
   startDate: string;
   dueDate: string;
-  people: TeamMember[];
+  /**
+   * Real workspace userIds picked as this project's initial members —
+   * the caller adds them via the real ProjectMember API
+   * (ProjectContext.tsx's addProjectMember) after the project itself is
+   * created. The creator is always auto-added as Owner by the backend
+   * and never appears in this list. Only meaningful on create; edit mode
+   * leaves this empty — member management for an existing project
+   * happens on its Team tab (see ProjectSettingsTab.tsx), not here, so
+   * there's exactly one real UI surface that mutates membership.
+   */
+  memberUserIds: string[];
 }
 
 export interface CreateProjectDrawerProps {
@@ -27,14 +38,15 @@ export interface CreateProjectDrawerProps {
   /** Editing an existing project — prefills the form and switches copy/labels to "Edit". */
   project?: Project | null;
   onUpdate?: (values: CreateProjectValues) => void;
+  /** Real workspace roster to pick initial members from (create mode only) — typically the caller's own `workspaceMembers` (lib/workspaceApi.ts), already excluding the current user (auto-added as Owner). */
+  workspaceMembers?: WorkspaceMemberRecord[];
 }
 
 /* ============================================================
    COMPONENT
 ============================================================ */
 
-export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpdate }: CreateProjectDrawerProps) {
-  const members = useMemo(() => loadMembers(), []);
+export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpdate, workspaceMembers = [] }: CreateProjectDrawerProps) {
   const isEditMode = project != null;
 
   /* ==========================================================
@@ -47,7 +59,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
   const [color, setColor] = useState(DEFAULT_PROJECT_COLOR);
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   /* ==========================================================
      RESET FORM WHEN OPENED
@@ -68,11 +80,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
         setColor(project.color ?? DEFAULT_PROJECT_COLOR);
         setStartDate(project.startDate ?? "");
         setDueDate(project.dueDate ?? "");
-        setMemberIds(
-          members
-            .filter((member) => project.people.some((person) => person.initials === member.initials && person.bg === member.bg))
-            .map((member) => member.id)
-        );
+        setSelectedUserIds([]);
       } else {
         setName("");
         setDescription("");
@@ -80,7 +88,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
         setColor(DEFAULT_PROJECT_COLOR);
         setStartDate("");
         setDueDate("");
-        setMemberIds([]);
+        setSelectedUserIds([]);
       }
     }
   }
@@ -104,8 +112,8 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
      MEMBER TOGGLE
   ========================================================== */
 
-  function handleMemberToggle(id: string) {
-    setMemberIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  function handleMemberToggle(userId: string) {
+    setSelectedUserIds((current) => (current.includes(userId) ? current.filter((item) => item !== userId) : [...current, userId]));
   }
 
   /* ==========================================================
@@ -118,10 +126,6 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
     const trimmedName = name.trim();
     if (!trimmedName) return;
 
-    const people: TeamMember[] = members
-      .filter((member) => memberIds.includes(member.id))
-      .map((member) => ({ initials: member.initials, bg: member.bg, fg: member.fg }));
-
     const values: CreateProjectValues = {
       name: trimmedName,
       description: description.trim(),
@@ -129,7 +133,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
       color,
       startDate,
       dueDate,
-      people,
+      memberUserIds: selectedUserIds,
     };
 
     if (isEditMode) {
@@ -138,6 +142,19 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
       onCreate?.(values);
     }
   }
+
+  const memberCandidates = useMemo(
+    () =>
+      workspaceMembers.map((record) => ({
+        userId: record.userId,
+        name: record.user.name ?? record.user.email,
+        jobTitle: record.user.jobTitle ?? "Team member",
+        initials: getInitials(record.user.name ?? record.user.email),
+        bg: record.user.avatarBg ?? "#AFC5DA",
+        fg: record.user.avatarFg ?? "#20242B",
+      })),
+    [workspaceMembers],
+  );
 
   if (!isOpen) return null;
 
@@ -279,49 +296,53 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
               </div>
             </div>
 
-            {/* TEAM MEMBERS */}
-            <div>
-              <label className="mb-2 block text-xs font-semibold text-[#20242B]">Team members</label>
-              <div className="space-y-1.5">
-                {members.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
-                    No team members available.
-                  </p>
-                ) : (
-                  members.map((member) => {
-                    const selected = memberIds.includes(member.id);
-                    return (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => handleMemberToggle(member.id)}
-                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                          selected ? "border-[#8EA7BF] bg-[#EEF2F6]" : "border-soft bg-card hover:bg-[#F7F8FA]"
-                        }`}
-                      >
-                        <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                          style={{ background: member.bg, color: member.fg ?? "#20242B" }}
+            {/* TEAM MEMBERS — create mode only; an existing project's
+                membership is managed for real on its Team tab, so this
+                drawer doesn't offer a second way to change it. */}
+            {!isEditMode && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-[#20242B]">Team members</label>
+                <div className="space-y-1.5">
+                  {memberCandidates.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
+                      No other workspace members to add yet.
+                    </p>
+                  ) : (
+                    memberCandidates.map((member) => {
+                      const selected = selectedUserIds.includes(member.userId);
+                      return (
+                        <button
+                          key={member.userId}
+                          type="button"
+                          onClick={() => handleMemberToggle(member.userId)}
+                          className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                            selected ? "border-[#8EA7BF] bg-[#EEF2F6]" : "border-soft bg-card hover:bg-[#F7F8FA]"
+                          }`}
                         >
-                          {member.initials}
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-semibold text-[#20242B]">{member.name}</span>
-                          <span className="block truncate text-[10px] text-[#98A2B3]">{member.jobTitle}</span>
-                        </span>
-
-                        {selected && (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#20242B] text-white">
-                            <Check size={12} />
+                          <span
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                            style={{ background: member.bg, color: member.fg }}
+                          >
+                            {member.initials}
                           </span>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold text-[#20242B]">{member.name}</span>
+                            <span className="block truncate text-[10px] text-[#98A2B3]">{member.jobTitle}</span>
+                          </span>
+
+                          {selected && (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#20242B] text-white">
+                              <Check size={12} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* FOOTER */}

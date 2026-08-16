@@ -33,7 +33,6 @@ import type {
 import { Pill } from "../components/ui/Pill";
 import { AvatarStack } from "../components/ui/AvatarStack";
 
-import { team } from "../data/dashboardData";
 import { loadMembers } from "../data/teamData";
 import {
   resolveCurrentActor,
@@ -84,12 +83,6 @@ type PriorityFilter =
 type SortMode =
   | "default"
   | "priority";
-
-type TeamFilter =
-  | "Product Team"
-  | "Engineering Team"
-  | "Design Team"
-  | "Marketing Team";
 
 interface KanbanTask {
   id: string;
@@ -171,38 +164,6 @@ const STATUS_OPTIONS: Status[] = [
     member: TeamMember;
   }
 */
-
-/* ============================================================
-   TEAM MEMBERS
-============================================================ */
-
-const TEAM_MEMBERS: Record<
-  TeamFilter,
-  TeamMember[]
-> = {
-  "Product Team": [
-    team.maya,
-    team.jonah,
-    team.rhea,
-    team.aidan,
-    team.talia,
-  ],
-
-  "Engineering Team": [
-    team.jonah,
-    team.rhea,
-  ],
-
-  "Design Team": [
-    team.maya,
-    team.aidan,
-  ],
-
-  "Marketing Team": [
-    team.talia,
-    team.maya,
-  ],
-};
 
 /* ============================================================
    STATUS HELPERS
@@ -867,14 +828,6 @@ export default function Kanban() {
     );
 
   const [
-    teamFilter,
-    setTeamFilter,
-  ] =
-    useState<TeamFilter>(
-      "Product Team"
-    );
-
-  const [
     moreOpen,
     setMoreOpen,
   ] =
@@ -895,18 +848,6 @@ export default function Kanban() {
       ],
       [projects]
     );
-
-  /* ==========================================================
-     TEAM OPTIONS
-  ========================================================== */
-
-  const teamOptions: TeamFilter[] =
-    [
-      "Product Team",
-      "Engineering Team",
-      "Design Team",
-      "Marketing Team",
-    ];
 
   /* ==========================================================
      FILTER TASKS
@@ -941,25 +882,10 @@ export default function Kanban() {
             task.project ===
               projectFilter;
 
-          const matchesTeam =
-            teamFilter ===
-              "Product Team" ||
-            task.assignees.some(
-              (assignee) =>
-                TEAM_MEMBERS[
-                  teamFilter
-                ].some(
-                  (member) =>
-                    member.initials ===
-                    assignee.initials
-                )
-            );
-
           return (
             matchesQuery &&
             matchesPriority &&
-            matchesProject &&
-            matchesTeam
+            matchesProject
           );
         }
       );
@@ -968,7 +894,6 @@ export default function Kanban() {
       query,
       priorityFilter,
       projectFilter,
-      teamFilter,
     ]);
 
   /* ==========================================================
@@ -1320,22 +1245,6 @@ export default function Kanban() {
               }
               onChange={
                 setProjectFilter
-              }
-            />
-
-            <PillSelect
-              value={
-                teamFilter
-              }
-              options={
-                teamOptions
-              }
-              onChange={(
-                value
-              ) =>
-                setTeamFilter(
-                  value as TeamFilter
-                )
               }
             />
           </div>
