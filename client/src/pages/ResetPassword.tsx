@@ -1,6 +1,9 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
+
+import { resetPasswordRequest } from "../lib/authApi";
+import { ApiError } from "../lib/api";
 
 /* The illustrated panel uses the actual reference/orbit-login.jpe artwork
    (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
@@ -27,10 +30,21 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Phase 19 Frontend Integration audit fix (Priority 2): the token
+  // ForgotPassword.tsx's dev-safe flow hands back in place of an emailed
+  // link (see auth.controller.ts's forgotPassword doc comment).
+  const token = searchParams.get("token");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!token) {
+      setError("This reset link is missing its token. Start over from Forgot password.");
+      return;
+    }
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
@@ -42,12 +56,17 @@ export default function ResetPassword() {
       return;
     }
 
-    /*
-     * No backend exists yet — a valid, matching password is treated
-     * as a successful mock password reset.
-     */
     setError(null);
-    setSubmitted(true);
+    setSubmitting(true);
+
+    try {
+      await resetPasswordRequest(token, password);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -173,6 +192,12 @@ export default function ResetPassword() {
                   Choose a new password for your Orbit workspace.
                 </p>
 
+                {!token && (
+                  <p style={{ margin: "14px 0 0", fontSize: 12, color: "#B3564B", textAlign: "center" }}>
+                    This page needs a reset link from Forgot password to work — go back and request one.
+                  </p>
+                )}
+
                 <form onSubmit={handleSubmit} className="flex flex-col" style={{ gap: 30, marginTop: 30 }}>
                   <input
                     autoFocus
@@ -197,8 +222,8 @@ export default function ResetPassword() {
 
                   {error && <span style={{ fontSize: 11.5, color: "#B3564B" }}>{error}</span>}
 
-                  <button type="submit" className="lift" style={primaryButtonStyle}>
-                    Reset password
+                  <button type="submit" disabled={submitting || !token} className="lift" style={primaryButtonStyle}>
+                    {submitting ? "Resetting…" : "Reset password"}
                   </button>
                 </form>
               </>

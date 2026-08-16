@@ -7,18 +7,19 @@ import type { ProjectMilestone, ProjectObjective } from "../../types/dashboard";
 import type { ActivityEvent } from "../../types/workspace";
 import type { Status } from "../../data/taskData";
 import { getDueGroup } from "../../data/taskData";
+import { mapProjectMemberToTeamMember } from "../../data/teamData";
 import { Pill } from "../ui/Pill";
 import { AvatarStack } from "../ui/AvatarStack";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useWorkspace } from "../../context/workspaceContextValue";
 import {
   buildProjectActivityFeed,
-  readProjectDiscussions,
-  readProjectFiles,
   formatRelativeTime,
   canEditProjectContent,
 } from "../../data/workspaceData";
 import { listActivity as listActivityRequest, type ActivityEventRecord } from "../../lib/activityApi";
+import { listFiles as listFilesRequest } from "../../lib/fileApi";
+import { listDiscussions as listDiscussionsRequest } from "../../lib/discussionApi";
 import { ACTIVITY_META } from "./activityMeta";
 
 const STATUS_META: { status: Status; label: string; icon: LucideIcon; color: string }[] = [
@@ -277,6 +278,7 @@ export function ProjectOverviewTab() {
     addMilestone,
     toggleMilestone,
     removeMilestone,
+    projectMembers,
   } = useProjectWorkspace();
   const canEdit = canEditProjectContent(permission);
   const { currentWorkspaceId } = useWorkspace();
@@ -320,6 +322,67 @@ export function ProjectOverviewTab() {
     };
   }, [currentWorkspaceId, project.id]);
 
+  // Phase 19 Frontend Integration audit fix (Priority 6): the real
+  // Files API (same one ProjectFilesTab.tsx's own list uses), replacing
+  // the old localStorage-only readProjectFiles — nothing writes that key
+  // anymore, so this stat had been stuck showing 0 regardless of how
+  // many files the project actually had. No dedicated loading/error UI,
+  // same reasoning as the activity fetch above — a compact sidebar stat,
+  // not the authoritative view.
+  const [filesCount, setFilesCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !workspaceId) return null;
+        return listFilesRequest(workspaceId, projectId);
+      })
+      .then((records) => {
+        if (!cancelled) setFilesCount(records?.length ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) setFilesCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId, project.id]);
+
+  // Phase 19 Frontend Integration follow-up (Fix Discussions Count): the
+  // real Discussions API (same one ProjectDiscussionsTab.tsx uses),
+  // replacing the old localStorage-only readProjectDiscussions — nothing
+  // wrote that key anymore, so this stat had been stuck showing 0
+  // regardless of how many discussions the project actually had. Same
+  // fetch/loading pattern as filesCount above.
+  const [discussionsCount, setDiscussionsCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const workspaceId = currentWorkspaceId;
+    const projectId = project.id;
+
+    Promise.resolve()
+      .then(() => {
+        if (cancelled || !workspaceId) return null;
+        return listDiscussionsRequest(workspaceId, projectId);
+      })
+      .then((records) => {
+        if (!cancelled) setDiscussionsCount(records?.length ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) setDiscussionsCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId, project.id]);
+
   const events = useMemo<ActivityEvent[]>(
     () =>
       activityRecords.map((record) => ({
@@ -333,15 +396,6 @@ export function ProjectOverviewTab() {
   );
 
   const activityFeed = buildProjectActivityFeed(project, tasks, events).slice(0, 5);
-  // filesCount/discussionsCount still read the old localStorage helpers
-  // (readProjectFiles/readProjectDiscussions) — already-stale before
-  // Stage 5 (nothing writes to them since Files/Discussions moved to
-  // real APIs in earlier phases), flagged for the Final Global Audit
-  // rather than fixed here, since it's a pre-existing gap Stage 5 didn't
-  // cause (unlike activityFeed above, which Stage 5's own migration
-  // would otherwise have broken).
-  const filesCount = readProjectFiles(project.id).length;
-  const discussionsCount = readProjectDiscussions(project.id).length;
   const openCount = tasks.filter((task) => task.status !== "Completed").length;
   const commentsCount = tasks.reduce((sum, task) => sum + (task.comments?.length ?? 0), 0);
 
@@ -521,13 +575,13 @@ export function ProjectOverviewTab() {
             <h3 className="font-display" style={{ fontSize: 15.5, fontWeight: 560, marginBottom: 12, color: "var(--text)" }}>
               Team members
             </h3>
-            {project.people.length === 0 ? (
+            {projectMembers.length === 0 ? (
               <p className="text-ink-3" style={{ fontSize: 12.5 }}>No members assigned yet.</p>
             ) : (
               <div className="flex items-center" style={{ gap: 10 }}>
-                <AvatarStack people={project.people} />
+                <AvatarStack people={projectMembers.map(mapProjectMemberToTeamMember)} />
                 <span className="text-ink-3" style={{ fontSize: 12 }}>
-                  {project.people.length} member{project.people.length === 1 ? "" : "s"}
+                  {projectMembers.length} member{projectMembers.length === 1 ? "" : "s"}
                 </span>
               </div>
             )}

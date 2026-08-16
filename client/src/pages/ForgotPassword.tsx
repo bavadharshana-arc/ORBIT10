@@ -2,6 +2,9 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 
+import { forgotPasswordRequest } from "../lib/authApi";
+import { ApiError } from "../lib/api";
+
 /* The illustrated panel uses the actual reference/orbit-login.jpe artwork
    (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
    import.meta.url)` so Vite serves/bundles it without needing an import
@@ -25,9 +28,15 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  // Phase 19 Frontend Integration audit fix (Priority 2): present only
+  // outside production (see auth.controller.ts's forgotPassword doc
+  // comment) — ORBIT has no email infrastructure, so the dev-safe reset
+  // flow hands the token back here instead of emailing a link.
+  const [devResetToken, setDevResetToken] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!email.trim()) {
@@ -36,7 +45,17 @@ export default function ForgotPassword() {
     }
 
     setError(null);
-    setSubmitted(true);
+    setSubmitting(true);
+
+    try {
+      const result = await forgotPasswordRequest(email.trim());
+      setDevResetToken(result.devResetToken ?? null);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -138,19 +157,29 @@ export default function ForgotPassword() {
                   Check your email
                 </h1>
 
-                <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--text-2)", textAlign: "center" }}>
-                  We've sent a mock reset link to <strong style={{ color: "var(--text)" }}>{email}</strong>. In this
-                  demo there's no real inbox, so continue below in its place.
-                </p>
+                {devResetToken ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--text-2)", textAlign: "center" }}>
+                    A password reset was started for <strong style={{ color: "var(--text)" }}>{email}</strong>. ORBIT
+                    doesn't have email delivery configured yet, so continue below in its place — this stands in for
+                    the emailed link in a real deployment.
+                  </p>
+                ) : (
+                  <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--text-2)", textAlign: "center" }}>
+                    If <strong style={{ color: "var(--text)" }}>{email}</strong> is registered, we've sent a link to
+                    reset your password to that address. It's valid for the next hour.
+                  </p>
+                )}
 
-                <button
-                  type="button"
-                  className="lift"
-                  style={{ ...primaryButtonStyle, marginTop: 30 }}
-                  onClick={() => navigate("/reset-password")}
-                >
-                  Continue to reset password
-                </button>
+                {devResetToken && (
+                  <button
+                    type="button"
+                    className="lift"
+                    style={{ ...primaryButtonStyle, marginTop: 30 }}
+                    onClick={() => navigate(`/reset-password?token=${encodeURIComponent(devResetToken)}`)}
+                  >
+                    Continue to reset password
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -176,8 +205,8 @@ export default function ForgotPassword() {
 
                   {error && <span style={{ fontSize: 11.5, color: "#B3564B" }}>{error}</span>}
 
-                  <button type="submit" className="lift" style={primaryButtonStyle}>
-                    Send reset link
+                  <button type="submit" disabled={submitting} className="lift" style={primaryButtonStyle}>
+                    {submitting ? "Sending…" : "Send reset link"}
                   </button>
                 </form>
               </>

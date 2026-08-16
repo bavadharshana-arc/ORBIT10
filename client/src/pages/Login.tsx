@@ -50,17 +50,21 @@ export default function Login() {
   }
 
   async function handleDemoLogin() {
-    // "Maya Chen, Owner" — one of the 5 real, database-backed RBAC demo
-    // accounts seeded by server/prisma/seed.ts (see AuthContext.tsx's
-    // DEMO_ROLE_BY_EMAIL for the other 4). Logging in here (not just
+    // Phase 19 Frontend Integration audit fix (Priority 1): "Demo
+    // Owner", the real, database-backed OWNER of the permanent "Demo
+    // Workspace" seeded by server/prisma/seed.ts's DEMO_USERS — not one
+    // of the 5 RBAC-only demo accounts (AuthContext.tsx's
+    // DEMO_ROLE_BY_EMAIL), which exist purely to exercise each AuthRole
+    // and don't belong to any workspace. Logging in here (not just
     // navigating) is required so ProtectedRoute's isAuthenticated check
     // lets the navigation to "/" (Dashboard) through instead of bouncing
-    // back to /login.
+    // back to /login; once signed in, WorkspaceContext fetches this
+    // account's real workspaces and lands on the seeded Demo Workspace.
     setError(null);
     setSubmitting(true);
 
     try {
-      await login("owner@orbit.dev", "demo1234");
+      await login("demo.owner@orbitdemo.local", "DemoPass123!");
       navigate("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
@@ -212,7 +216,7 @@ export default function Login() {
             </div>
 
             <button type="button" onClick={handleDemoLogin} disabled={submitting} style={secondaryButtonStyle}>
-              Continue to demo workspace
+              Explore Demo Workspace
             </button>
           </div>
         </div>

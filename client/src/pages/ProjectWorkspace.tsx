@@ -13,7 +13,6 @@ import type { ProjectWorkspaceContextValue } from "../context/projectWorkspaceCo
 import { useAuth } from "../context/AuthContext";
 import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 import { ApiError } from "../lib/api";
-import { listProjectMembers } from "../lib/projectMemberApi";
 import type { ProjectPermission } from "../types/dashboard";
 import { updateProject as updateProjectRequest, deleteProject as deleteProjectRequest } from "../lib/projectApi";
 import { createTask as createTaskRequest } from "../lib/taskApi";
@@ -110,7 +109,17 @@ export default function ProjectWorkspace() {
   const navigate = useNavigate();
 
   const { tasks, setTasks, workspaceMembers } = useTaskContext();
-  const { projects, setProjects, isLoading: projectsLoading } = useProjectContext();
+  const {
+    projects,
+    setProjects,
+    isLoading: projectsLoading,
+    projectMembersByProjectId,
+    projectMembersLoading,
+    projectMembersError,
+    addProjectMember: addProjectMemberToContext,
+    removeProjectMember: removeProjectMemberFromContext,
+    updateProjectMemberRole: updateProjectMemberRoleInContext,
+  } = useProjectContext();
   const { currentWorkspaceId } = useWorkspace();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -130,6 +139,15 @@ export default function ProjectWorkspace() {
   const { user } = useAuth();
 
   const project = projects.find((p) => p.id === projectId) ?? null;
+
+  // Phase 19 Frontend Integration follow-up (Persist Project people):
+  // this project's real roster, straight from ProjectContext's single
+  // shared fetch — no separate fetch of its own (see ProjectContext.tsx's
+  // doc comment).
+  const projectMembers = useMemo(
+    () => (projectId ? (projectMembersByProjectId[projectId] ?? []) : []),
+    [projectMembersByProjectId, projectId],
+  );
 
   const projectTasks = useMemo(
     () => (project ? tasks.filter((task) => task.project === project.name) : []),
@@ -210,37 +228,10 @@ export default function ProjectWorkspace() {
   }, [currentWorkspaceId, projectId]);
 
   // Stage 6 (Permissions Alignment): the signed-in user's real
-  // ProjectRole for this project, from the real project-members API
-  // (Phase 22's listProjectMembers — read-only until Stage 6 also wired
-  // its write endpoints into ProjectTeamTab.tsx). Declared before the
-  // `!project` guard below, same as every other hook in this component.
-  const [myProjectRoleRecord, setMyProjectRoleRecord] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.resolve()
-      .then(() => {
-        if (cancelled || !currentWorkspaceId || !projectId) return null;
-        return listProjectMembers(currentWorkspaceId, projectId);
-      })
-      .then((records) => {
-        if (cancelled) return;
-        if (!currentWorkspaceId || !projectId || !records) {
-          setMyProjectRoleRecord(null);
-          return;
-        }
-        const mine = records.find((record) => record.userId === user?.id);
-        setMyProjectRoleRecord(mine?.role ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setMyProjectRoleRecord(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentWorkspaceId, projectId, user?.id]);
+  // ProjectRole for this project — derived from the shared projectMembers
+  // above (Phase 19 follow-up) rather than this component's own separate
+  // fetch, since ProjectContext already loads every project's roster once.
+  const myProjectRoleRecord = projectMembers.find((record) => record.userId === user?.id)?.role ?? null;
 
   // Real WorkspaceRole — governs the project *entity* itself
   // (edit/duplicate/archive/delete) and task creation, both gated on
@@ -295,13 +286,21 @@ export default function ProjectWorkspace() {
     setMutationError(null);
 
     try {
-      // Only name/description are real columns — the rest stays a
-      // local-only field on top of the real record (see Projects.tsx's
-      // handleUpdateProject, same pattern).
+      // Every field below is a real, persisted column (Phase 19 audit fix,
+      // Priority 8; see Projects.tsx's handleUpdateProject, same pattern).
+      // Membership isn't edited here — an existing project's roster is
+      // managed for real on its Team tab (see CreateProjectDrawer.tsx's
+      // doc comment on memberUserIds).
       const record = await updateProjectRequest(currentWorkspaceId, currentProject.id, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       setProjects((current) =>
         current.map((p) =>
@@ -309,13 +308,12 @@ export default function ProjectWorkspace() {
             ? {
                 ...p,
                 name: record.name,
-                tag: values.tag,
+                tag: record.tag ?? "",
                 description: record.description ?? undefined,
-                color: values.color,
-                startDate: values.startDate || undefined,
-                dueDate: values.dueDate || undefined,
-                due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-                people: values.people,
+                color: record.color ?? undefined,
+                startDate: record.startDate?.slice(0, 10),
+                dueDate,
+                due: dueDate ? formatProjectDue(dueDate) : "No due date",
               }
             : p
         )
@@ -547,6 +545,12 @@ export default function ProjectWorkspace() {
     addMilestone,
     toggleMilestone,
     removeMilestone,
+    projectMembers,
+    projectMembersLoading,
+    projectMembersError,
+    addProjectMember: (userId, role) => addProjectMemberToContext(currentProject.id, userId, role),
+    removeProjectMember: (memberId) => removeProjectMemberFromContext(currentProject.id, memberId),
+    updateProjectMemberRole: (memberId, role) => updateProjectMemberRoleInContext(currentProject.id, memberId, role),
   };
 
   return (
@@ -643,7 +647,7 @@ export default function ProjectWorkspace() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" style={{ gap: 14, marginBottom: 18 }}>
         <StatCard label="Progress" value={`${project.progress}%`} icon={TrendingUp} compact />
         <StatCard label="Tasks" value={`${completedCount} / ${projectTasks.length}`} icon={ListChecks} compact />
-        <StatCard label="Members" value={`${project.people.length}`} icon={Users} compact />
+        <StatCard label="Members" value={`${projectMembers.length}`} icon={Users} compact />
         <StatCard label="Due soon" value={`${dueSoonCount}`} icon={CalendarClock} compact />
       </div>
 

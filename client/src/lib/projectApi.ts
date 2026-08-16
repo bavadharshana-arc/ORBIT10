@@ -11,6 +11,14 @@ export interface ProjectRecord {
   id: string;
   name: string;
   description: string | null;
+  // Phase 19 Frontend Integration audit fix (Priority 8): previously
+  // client-only fields that reset on every refresh — now real, persisted
+  // columns (see server/prisma/schema.prisma's Project model).
+  tag: string | null;
+  color: string | null;
+  /** "YYYY-MM-DD" — sliced from the ISO timestamp the API returns, same convention as TaskRecord.dueDate's client-side handling. */
+  startDate: string | null;
+  dueDate: string | null;
   workspaceId: string;
   createdAt: string;
   updatedAt: string;
@@ -19,6 +27,12 @@ export interface ProjectRecord {
 export interface ProjectWriteInput {
   name?: string;
   description?: string;
+  tag?: string | null;
+  color?: string | null;
+  /** "YYYY-MM-DD", or null to clear. */
+  startDate?: string | null;
+  /** "YYYY-MM-DD", or null to clear. */
+  dueDate?: string | null;
 }
 
 export function listProjects(workspaceId: string): Promise<ProjectRecord[]> {

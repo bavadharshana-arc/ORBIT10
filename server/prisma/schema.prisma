@@ -25,6 +25,16 @@ model User {
   bio                     String?
   avatarBg                String?
   avatarFg                String?
+  // Phase 19 Frontend Integration audit fix (Priority 2): self-service
+  // password reset. Only a hash of the raw token is ever stored (mirrors
+  // password itself never being stored in plaintext) — the raw token is
+  // sent to the caller once (forgot-password's response, since this
+  // project has no email infrastructure to deliver it through instead;
+  // see auth.controller.ts's forgotPassword doc comment) and never
+  // persisted anywhere. expiresAt bounds how long that token is valid;
+  // both are cleared once a reset succeeds.
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   workspaceMembers        WorkspaceMember[]
@@ -67,6 +77,19 @@ model Project {
   id             String             @id @default(cuid())
   name           String
   description    String?
+  // Phase 19 Frontend Integration audit fix (Priority 8): previously
+  // client-only fields (CreateProjectDrawer.tsx) that silently reset on
+  // every refresh because nothing here persisted them. Nullable, same
+  // pattern as User/Workspace's own Phase 18/19 additions above — an
+  // existing project has none of these set until edited through the UI.
+  // tag/color aren't modeled as enums: the client already restricts them
+  // to fixed option sets (client/src/data/projectData.ts's PROJECT_TAGS/
+  // PROJECT_COLORS), validated in code rather than the DB, matching how
+  // Task.status/priority and Workspace.dateFormat/weekStart work.
+  tag            String?
+  color          String?
+  startDate      DateTime?
+  dueDate        DateTime?
   workspaceId    String
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

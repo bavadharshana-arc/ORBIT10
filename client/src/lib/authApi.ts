@@ -29,3 +29,25 @@ export function registerRequest(name: string, email: string, password: string): 
 export function loginRequest(email: string, password: string): Promise<LoginResult> {
   return apiPost<LoginResult>("/auth/login", { email, password });
 }
+
+/* ============================================================
+   PASSWORD RESET (Phase 19 Frontend Integration audit fix)
+
+   Mirrors auth.controller.ts's forgotPassword/resetPassword response
+   shapes. devResetToken is only ever present outside production (see
+   the controller's doc comment for why — this project has no email
+   infrastructure to deliver a real reset link through).
+============================================================ */
+
+export interface ForgotPasswordResult {
+  message: string;
+  devResetToken?: string;
+}
+
+export function forgotPasswordRequest(email: string): Promise<ForgotPasswordResult> {
+  return apiPost<ForgotPasswordResult>("/auth/forgot-password", { email });
+}
+
+export function resetPasswordRequest(token: string, password: string): Promise<{ message: string }> {
+  return apiPost<{ message: string }>("/auth/reset-password", { token, password });
+}

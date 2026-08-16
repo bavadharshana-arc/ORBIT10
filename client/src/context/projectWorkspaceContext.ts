@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom";
 import type { Project, ProjectMilestone, ProjectObjective, ProjectPermission } from "../types/dashboard";
 import type { Task } from "../data/taskData";
+import type { ProjectMemberRecord, ProjectMemberRole } from "../lib/projectMemberApi";
 
 export interface ProjectWorkspaceContextValue {
   project: Project;
@@ -26,6 +27,14 @@ export interface ProjectWorkspaceContextValue {
   addMilestone: (title: string) => void;
   toggleMilestone: (id: string) => void;
   removeMilestone: (id: string) => void;
+
+  /** This project's real roster (ProjectContext's projectMembersByProjectId, scoped to this project) — the single source of truth ProjectOverviewTab/ProjectSettingsTab/ProjectTeamTab/ProjectAnalyticsTab all read from. */
+  projectMembers: ProjectMemberRecord[];
+  projectMembersLoading: boolean;
+  projectMembersError: string | null;
+  addProjectMember: (userId: string, role: ProjectMemberRole) => Promise<ProjectMemberRecord>;
+  removeProjectMember: (memberId: string) => Promise<void>;
+  updateProjectMemberRole: (memberId: string, role: ProjectMemberRole) => Promise<ProjectMemberRecord>;
 }
 
 export function useProjectWorkspace(): ProjectWorkspaceContextValue {

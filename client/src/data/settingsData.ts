@@ -272,14 +272,14 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-
-const ORBIT_DATA_KEYS = ["orbit-team-members", "orbit-team-activity", "orbit-tasks"];
-
-export function resetWorkspaceData(): void {
-  ORBIT_DATA_KEYS.forEach((key) => localStorage.removeItem(key));
-}
-
-export function deleteAllOrbitData(): void {
-  ORBIT_DATA_KEYS.forEach((key) => localStorage.removeItem(key));
-  localStorage.removeItem(SETTINGS_STORAGE_KEY);
-}
+// resetWorkspaceData/deleteAllOrbitData/ORBIT_DATA_KEYS (Phase 19
+// Frontend Integration audit fix, Priority 3 & 7) were removed —
+// DangerZoneSection.tsx's "Reset workspace data"/"Delete account"
+// buttons only ever cleared these localStorage keys, none of which the
+// real app still writes (orbit-tasks and orbit-team-activity have zero
+// writers at all; orbit-team-members is a stale key from before Team.tsx
+// went real in Stage 1), so both actions silently did nothing to real
+// backend data while claiming to. "Delete account" now calls the real
+// DELETE /api/users/me (see DangerZoneSection.tsx); "Reset workspace
+// data" was removed outright — there's no safe backend equivalent for
+// resetting a *shared* workspace's real data from one member's session.

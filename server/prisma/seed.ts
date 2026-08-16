@@ -123,6 +123,26 @@ async function getOrCreateProject(workspaceId: string, name: string, description
   return prisma.project.create({ data: { name, description, workspaceId } });
 }
 
+/**
+ * Phase 19 Frontend Integration follow-up (Persist Project people) —
+ * without this, the demo projects above had zero ProjectMember rows at
+ * all (only real WorkspaceMember rows), so every project-scoped action
+ * gated by requireProjectMembership (project.middleware.ts) — posting a
+ * discussion, replying, reacting, pin/unpin — genuinely 403'd for every
+ * demo user against every demo project, workspace OWNER included:
+ * requireProjectMembership checks real ProjectMember rows independently
+ * of workspace role, by design (see its own doc comment). Idempotent,
+ * same lookup-then-create pattern as every other helper in this file.
+ */
+async function getOrCreateProjectMember(projectId: string, userId: string, role: string) {
+  const existing = await prisma.projectMember.findUnique({ where: { userId_projectId: { userId, projectId } } });
+  if (existing) {
+    if (existing.role === role) return existing;
+    return prisma.projectMember.update({ where: { id: existing.id }, data: { role } });
+  }
+  return prisma.projectMember.create({ data: { projectId, userId, role } });
+}
+
 type TaskFields = {
   description: string;
   status: string;
@@ -171,9 +191,26 @@ async function main() {
     });
   }
 
+  // Every demo user is a real member of every demo project — they're
+  // each assigned tasks across all three projects above, so they need
+  // real ProjectMember rows to actually act on them (comment, post
+  // discussions, ...), not just workspace membership. OWNER keeps
+  // "Owner" at the project level too; the rest get "Editor" (they're
+  // actively doing the work, not just viewing/commenting on it).
+  const PROJECT_ROLE_BY_WORKSPACE_ROLE: Record<string, string> = {
+    OWNER: "Owner",
+    ADMIN: "Editor",
+    MEMBER: "Editor",
+  };
+
   let taskCount = 0;
   for (const projectSeed of PROJECTS) {
     const project = await getOrCreateProject(workspace.id, projectSeed.name, projectSeed.description);
+
+    for (const demoUser of DEMO_USERS) {
+      const user = users[demoUser.email]!;
+      await getOrCreateProjectMember(project.id, user.id, PROJECT_ROLE_BY_WORKSPACE_ROLE[demoUser.role]!);
+    }
 
     for (const taskSeed of projectSeed.tasks) {
       await getOrCreateTask(project.id, taskSeed.title, {
