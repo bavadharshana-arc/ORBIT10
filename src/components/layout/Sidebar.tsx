@@ -6,6 +6,7 @@ import { SparkleMark } from "../doodles/SparkleMark";
 import { Avatar } from "../ui/Avatar";
 import { useAuth } from "../../context/AuthContext";
 import { hasRole, resolveEffectiveRole } from "../../lib/permissions";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface SidebarProps {
   items: NavItem[];
@@ -43,9 +44,21 @@ const inactiveNavStyle: CSSProperties = {
   fontWeight: 500,
 };
 
+// Fallback shown only if this ever rendered signed-out (it can't —
+// Sidebar only mounts inside DashboardLayout, itself behind
+// ProtectedRoute, which guarantees `user` is set) — kept anyway to match
+// ProfileMenu.tsx's identical defensive fallback for the same trigger-row
+// shape, rather than assuming this component's guarantees never change.
+const GUEST_NAME = "Maya Chen";
+const GUEST_INITIALS = "MC";
+const GUEST_ROLE = "Owner";
+
 export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
-  const { logout, role } = useAuth();
+  const { user, logout, role } = useAuth();
+  const displayName = user?.name ?? GUEST_NAME;
+  const displayInitials = user?.initials ?? GUEST_INITIALS;
+  const displayRole = user?.role ?? GUEST_ROLE;
   const canViewSettings = hasRole(resolveEffectiveRole(role), "Admin");
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
@@ -123,6 +136,8 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
+        <WorkspaceSwitcher />
+
         <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {items.map((item) => {
             const path = ROUTES[item.label] ?? "/";
@@ -198,11 +213,11 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
               textAlign: "left",
             }}
           >
-            <Avatar initials="MC" bg="#AFC5DA" size={34} />
+            <Avatar initials={displayInitials} bg="#AFC5DA" size={34} />
             <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Maya Chen</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{displayName}</div>
               <div className="text-ink-3" style={{ fontSize: 11.5 }}>
-                Product Lead
+                {displayRole}
               </div>
             </div>
             <LogOut size={15} strokeWidth={1.7} color="#98A2B3" />
