@@ -118,10 +118,18 @@ function getMonthMatrix(year: number, month: number): Date[][] {
 }
 
 // ============================================================================
-// Mock data
+// People sidebar data
 // ============================================================================
-// Dates are generated relative to "today" (at load time) so the page always
-// reads as populated and realistic, whenever it's actually opened.
+// Phase [Calendar data-isolation fix]: this used to sit next to a
+// buildMockEvents() that fabricated 15 fake calendar events (dates relative
+// to "today" at load time) unconditionally shown to every account regardless
+// of workspace — not real data, not scoped, so a brand-new account saw the
+// exact same "Design review" / "API deadline" / etc. items as any other
+// account. Removed; the calendar grid now renders only real, workspace-scoped
+// task due dates from TaskContext (taskEvents below), matching how
+// Kanban/Timeline/Dashboard already source their data. PEOPLE stays as a
+// cosmetic filter-sidebar roster (not a source of grid events) — out of
+// scope for this fix.
 
 const PEOPLE: Person[] = [
   { id: "p1", name: "Eddie Mutisya", email: "mutisya@orbit.com", initials: "EM" },
@@ -129,141 +137,6 @@ const PEOPLE: Person[] = [
   { id: "p3", name: "Antony Kelvin", email: "antony@orbit.com", initials: "AK" },
   { id: "p4", name: "Priya Nair", email: "priya@orbit.com", initials: "PN" },
 ];
-
-function buildMockEvents(): CalendarEvent[] {
-  const today = new Date();
-  const at = (offsetDays: number) => toDateKey(addDays(today, offsetDays));
-
-  return [
-    {
-      id: "evt-1",
-      title: "Design review",
-      date: at(0),
-      type: "meeting",
-      time: "10:30 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-2",
-      title: "API deadline",
-      date: at(0),
-      type: "deadline",
-      time: "5:00 PM",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-3",
-      title: "Sprint planning",
-      date: at(1),
-      type: "meeting",
-      time: "9:00 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-4",
-      title: "Write onboarding copy",
-      date: at(1),
-      type: "task",
-      time: "1:00 PM",
-      project: "Growth",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-5",
-      title: "Beta launch",
-      date: at(3),
-      type: "milestone",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-6",
-      title: "1:1 with manager",
-      date: at(4),
-      time: "11:00 AM",
-      type: "meeting",
-      assigneeId: "p3",
-    },
-    {
-      id: "evt-7",
-      title: "QA pass on Kanban",
-      date: at(5),
-      type: "task",
-      time: "2:00 PM",
-      project: "Orbit Redesign",
-      assigneeId: "p3",
-    },
-    {
-      id: "evt-8",
-      title: "Client feedback due",
-      date: at(5),
-      type: "deadline",
-      time: "6:00 PM",
-      project: "Client Portal",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-9",
-      title: "Team standup",
-      date: at(-1),
-      type: "meeting",
-      time: "9:15 AM",
-    },
-    {
-      id: "evt-10",
-      title: "Analytics dashboard v1",
-      date: at(-2),
-      type: "milestone",
-      project: "Core API",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-11",
-      title: "Prep quarterly review",
-      date: at(8),
-      type: "task",
-      time: "3:00 PM",
-      project: "Leadership",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-12",
-      title: "Security audit deadline",
-      date: at(10),
-      type: "deadline",
-      time: "5:00 PM",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-13",
-      title: "Design system sync",
-      date: at(12),
-      type: "meeting",
-      time: "10:00 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-14",
-      title: "Marketing site launch",
-      date: at(14),
-      type: "milestone",
-      project: "Growth",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-15",
-      title: "Team offsite",
-      date: at(15),
-      type: "meeting",
-      project: "Team",
-    },
-  ];
-}
 
 // ============================================================================
 // Event visual treatment
@@ -887,7 +760,6 @@ function CalendarGrid({
 
 export default function Calendar() {
   const today = useMemo(() => new Date(), []);
-  const mockEvents = useMemo(() => buildMockEvents(), []);
 
   const { tasks } = useTaskContext();
 
@@ -933,19 +805,13 @@ export default function Calendar() {
       event.project?.toLowerCase().includes(query);
 
     // Real tasks have no `assigneeId` — there's no real link between
-    // TaskContext's assignees and this page's mock People list — so the
-    // People filter (which only mock events can honestly satisfy) is
-    // scoped to mock events only. Otherwise selecting any person here
-    // would wipe every real task off the calendar, since none of them
-    // could ever match a mock person id.
-    const matchesPerson = (event: CalendarEvent) =>
-      !selectedPersonId || event.assigneeId === selectedPersonId;
-
-    return [
-      ...mockEvents.filter((event) => matchesQuery(event) && matchesPerson(event)),
-      ...taskEvents.filter((event) => matchesQuery(event)),
-    ];
-  }, [mockEvents, taskEvents, searchQuery, selectedPersonId]);
+    // TaskContext's assignees and this page's People sidebar roster — so
+    // the People filter has nothing real to narrow by. selectedPersonId
+    // is left wired up (My Schedule / selection highlighting still work)
+    // but doesn't gate these events, same as it never gated real tasks
+    // before this fix either.
+    return taskEvents.filter((event) => matchesQuery(event));
+  }, [taskEvents, searchQuery]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
