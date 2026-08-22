@@ -5,6 +5,22 @@ import type { WorkspaceActor } from "../types/workspace";
 
 type Notify = (input: NewNotification) => void;
 
+/**
+ * Appends `?task=<id>` to an existing page href (`/projects/:id/list`,
+ * `/tasks`, …) — the query-param convention every task-list-capable view
+ * (ProjectListTab/ProjectCalendarTab/ProjectTimelineTab/Tasks/Timeline)
+ * now reads on mount to auto-open that task's existing TaskDetailsDrawer,
+ * so a notification click lands on the specific task, not just its list.
+ * No new routes/pages — every one of those views already has its own
+ * `selectedTaskId` + TaskDetailsDrawer; this just gives it a real id to
+ * consume. Exported so useTaskCommentHandlers.ts's comment notification
+ * (the one other trigger that names a specific task) uses the exact same
+ * convention rather than inventing its own.
+ */
+export function withTaskParam(href: string, taskId: string): string {
+  return `${href}${href.includes("?") ? "&" : "?"}task=${taskId}`;
+}
+
 /* ============================================================
    Stage 4 (Real Notifications): every trigger below now targets a
    real recipient userId (`recipientId`, verified server-side to
@@ -21,6 +37,8 @@ export function notifyTaskAssigned(
   addNotification: Notify,
   params: {
     taskTitle: string;
+    /** Real task id — appended to actionHref so the click opens this specific task, not just its list. */
+    taskId: string;
     projectName: string;
     /** Real assignee userId — the notification's recipient. */
     assigneeId: string | null | undefined;
@@ -30,7 +48,7 @@ export function notifyTaskAssigned(
     actionHref: string;
   }
 ): void {
-  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
+  const { taskTitle, taskId, projectName, assigneeId, actorId, actor, actionHref } = params;
 
   if (!assigneeId || assigneeId === actorId) {
     return;
@@ -41,7 +59,7 @@ export function notifyTaskAssigned(
     title: "You were assigned a task",
     message: `${actor.name} assigned you "${taskTitle}" in ${projectName}.`,
     recipientId: assigneeId,
-    actionHref,
+    actionHref: withTaskParam(actionHref, taskId),
   });
 }
 
@@ -50,6 +68,8 @@ export function notifyTaskCompleted(
   addNotification: Notify,
   params: {
     taskTitle: string;
+    /** Real task id — appended to actionHref so the click opens this specific task, not just its list. */
+    taskId: string;
     projectName: string;
     /** Real assignee userId — the notification's recipient. */
     assigneeId: string | null | undefined;
@@ -59,7 +79,7 @@ export function notifyTaskCompleted(
     actionHref: string;
   }
 ): void {
-  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
+  const { taskTitle, taskId, projectName, assigneeId, actorId, actor, actionHref } = params;
 
   if (!assigneeId || assigneeId === actorId) {
     return;
@@ -70,7 +90,7 @@ export function notifyTaskCompleted(
     title: "Task completed",
     message: `${actor.name} marked "${taskTitle}" in ${projectName} as complete.`,
     recipientId: assigneeId,
-    actionHref,
+    actionHref: withTaskParam(actionHref, taskId),
   });
 }
 

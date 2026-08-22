@@ -83,6 +83,20 @@ export const markAllRead = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteNotification = async (req: Request, res: Response) => {
+  const notificationId = req.params.notificationId as string;
+
+  try {
+    await notificationService.deleteNotification(req.userId!, notificationId);
+    return res.status(204).send();
+  } catch (error) {
+    if (error instanceof Error && error.message === "Notification not found") {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 export const clearAll = async (req: Request, res: Response) => {
   try {
     await notificationService.clearAllNotifications(req.userId!);

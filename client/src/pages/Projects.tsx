@@ -3,13 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Search, Plus, FolderOpen } from "lucide-react";
 
 import type { Project, TeamMember } from "../types/dashboard";
-import { getDueGroup } from "../data/taskData";
-import { Pill } from "../components/ui/Pill";
+import { getDueGroup, getUpcomingTasks } from "../data/taskData";
 import { AvatarStack } from "../components/ui/AvatarStack";
-import { ProgressRing } from "../components/ui/ProgressRing";
 import { useProjectContext } from "../context/projectContextValue";
 import { useWorkspace } from "../context/workspaceContextValue";
-import { formatProjectDue, generateProjectId, getProjectStatus, PROJECT_STATUS_META } from "../data/projectData";
+import {
+  formatProjectDue,
+  generateProjectId,
+  getProjectStatus,
+  getUpcomingProjects,
+  PROJECT_STATUS_META,
+} from "../data/projectData";
 import { useTaskContext } from "../context/taskContextValue";
 import { ApiError } from "../lib/api";
 import {
@@ -19,6 +23,10 @@ import {
 } from "../lib/projectApi";
 import { CreateProjectDrawer, type CreateProjectValues } from "../components/CreateProjectDrawer";
 import { ProjectActionsMenu } from "../components/projects/ProjectActionsMenu";
+import { resolveProjectIcon, softTint } from "../components/projects/projectCardMeta";
+import { ProjectOverviewCard } from "../components/projects/ProjectOverviewCard";
+import { UpcomingDeadlinesCard, type DeadlineItem } from "../components/projects/UpcomingDeadlinesCard";
+import { TasksByStatusCard } from "../components/projects/TasksByStatusCard";
 import { ConfirmDangerModal } from "../components/settings/ConfirmDangerModal";
 import { loadMembers, mapProjectMemberToTeamMember } from "../data/teamData";
 import { resolveCurrentActor } from "../data/workspaceData";
@@ -60,6 +68,7 @@ interface ProjectCardProps {
 function ProjectCard({ project, people, taskCounts, canManage, onSelect, isMenuOpen, onToggleMenu, onEdit, onDuplicate, onArchive, onDelete }: ProjectCardProps) {
   const status = getProjectStatus(project);
   const statusMeta = PROJECT_STATUS_META[status];
+  const { icon: Icon } = resolveProjectIcon(project.tag);
 
   return (
     <div
@@ -73,34 +82,80 @@ function ProjectCard({ project, people, taskCounts, canManage, onSelect, isMenuO
         }
       }}
       className="bg-card border-soft shadow-float lift fade-in flex flex-col"
-      style={{ borderRadius: 22, padding: 22, gap: 14, cursor: "pointer" }}
+      style={{ borderRadius: 22, padding: 24, gap: 16, cursor: "pointer" }}
     >
       <div className="flex items-start justify-between" style={{ gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div className="flex items-center" style={{ gap: 7, marginBottom: 8 }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: project.color ?? "var(--blue-dark)", flexShrink: 0 }} />
-            <h3 style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.3, color: "var(--text)" }}>{project.name}</h3>
+        <div className="flex items-start" style={{ gap: 12, minWidth: 0 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 13,
+              background: softTint(project.color),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon size={18} strokeWidth={2} color={project.color ?? "var(--blue-dark)"} />
           </div>
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <Pill tone="surface">{project.tag}</Pill>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: statusMeta.color }}>{statusMeta.label}</span>
+
+          <div style={{ minWidth: 0, paddingTop: 1 }}>
+            <h3
+              style={{
+                fontSize: 15.5,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                color: "var(--text)",
+                marginBottom: 6,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {project.name}
+            </h3>
+            <div className="flex items-center" style={{ gap: 6, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--text-2)",
+                  background: "var(--surface-2)",
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                }}
+              >
+                {project.tag}
+              </span>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: statusMeta.color,
+                  background: "var(--surface-2)",
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                }}
+              >
+                {statusMeta.label}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center" style={{ gap: 6, flexShrink: 0 }}>
-          <ProgressRing value={project.progress} size={40} stroke={4} />
-          {canManage && (
-            <ProjectActionsMenu
-              isOpen={isMenuOpen}
-              onToggle={onToggleMenu}
-              onEdit={onEdit}
-              onDuplicate={onDuplicate}
-              onArchive={onArchive}
-              onDelete={onDelete}
-              isArchived={status === "archived"}
-            />
-          )}
-        </div>
+        {canManage && (
+          <ProjectActionsMenu
+            isOpen={isMenuOpen}
+            onToggle={onToggleMenu}
+            onEdit={onEdit}
+            onDuplicate={onDuplicate}
+            onArchive={onArchive}
+            onDelete={onDelete}
+            isArchived={status === "archived"}
+          />
+        )}
       </div>
 
       <div className="flex items-center text-ink-3" style={{ gap: 10, fontSize: 12, flexWrap: "wrap" }}>
@@ -117,7 +172,7 @@ function ProjectCard({ project, people, taskCounts, canManage, onSelect, isMenuO
         )}
       </div>
 
-      <div style={{ height: 6, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
+      <div style={{ height: 7, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
         <div
           style={{
             width: `${project.progress}%`,
@@ -399,6 +454,67 @@ export default function Projects() {
     archived: projects.filter((p) => getProjectStatus(p) === "archived").length,
   };
 
+  /* ==========================================================
+     INFO CARDS (below the project grid) — every number below is
+     derived from the same `projects`/`tasks` this page already loads
+     from ProjectContext/TaskContext (unaffected by the search box or
+     the Active/Completed/Archived filter above, same as Dashboard's
+     own stat cards), reusing the exact status/due-date helpers the
+     rest of the app already relies on. No new data source, no
+     fabricated numbers.
+  ========================================================== */
+
+  const overviewCounts = {
+    total: projects.length,
+    active: counts.active,
+    completed: counts.completed,
+    archived: counts.archived,
+  };
+
+  const tasksByStatusCounts = useMemo(
+    () => ({
+      notStarted: tasks.filter((task) => task.status === "To Do").length,
+      inProgress: tasks.filter((task) => task.status === "In Progress").length,
+      completed: tasks.filter((task) => task.status === "Completed").length,
+    }),
+    [tasks]
+  );
+
+  // Same task/project deadline merge Dashboard.tsx's own Upcoming widget
+  // uses (getUpcomingTasks + getUpcomingProjects, sorted by due date) —
+  // kept page-local rather than shared, matching how Dashboard's version
+  // is page-local too.
+  const upcomingDeadlines = useMemo<DeadlineItem[]>(() => {
+    const upcomingTasks = getUpcomingTasks(tasks, 3);
+    const upcomingProjects = getUpcomingProjects(projects, 2);
+
+    const items: { item: DeadlineItem; sortKey: string }[] = [];
+
+    upcomingTasks.forEach((task) => {
+      items.push({
+        sortKey: task.dueDate ?? "",
+        // Task.due (TaskContext.tsx) is the raw "YYYY-MM-DD" string, not a
+        // relative label — unlike Project.due, which is already run
+        // through this same formatProjectDue() at load time. Reused here
+        // rather than duplicated: the function only ever looks at a plain
+        // "YYYY-MM-DD" string, so it works for a task's due date too.
+        item: { name: task.title, projectName: task.project, relative: task.dueDate ? formatProjectDue(task.dueDate) : "No due date" },
+      });
+    });
+
+    upcomingProjects.forEach((project) => {
+      items.push({
+        sortKey: project.dueDate ?? "",
+        item: { name: project.name, projectName: `${project.tag} project`, relative: project.due },
+      });
+    });
+
+    return items
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .slice(0, 4)
+      .map((entry) => entry.item);
+  }, [tasks, projects]);
+
   const trimmedQuery = query.trim().toLowerCase();
 
   const filteredProjects = projects.filter((p) => {
@@ -566,6 +682,23 @@ export default function Projects() {
           ))
         )}
       </div>
+
+      {!projectsLoading && !projectsError && currentWorkspaceId && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 fade-in" style={{ gap: 20, marginTop: 32 }}>
+          <ProjectOverviewCard
+            total={overviewCounts.total}
+            active={overviewCounts.active}
+            completed={overviewCounts.completed}
+            archived={overviewCounts.archived}
+          />
+          <UpcomingDeadlinesCard items={upcomingDeadlines} />
+          <TasksByStatusCard
+            notStarted={tasksByStatusCounts.notStarted}
+            inProgress={tasksByStatusCounts.inProgress}
+            completed={tasksByStatusCounts.completed}
+          />
+        </div>
+      )}
 
       <CreateProjectDrawer
         isOpen={isCreateDrawerOpen}

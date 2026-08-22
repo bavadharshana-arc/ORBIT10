@@ -60,6 +60,12 @@ function toDueDateString(iso: string | null): string | undefined {
   return iso ? iso.slice(0, 10) : undefined;
 }
 
+/** Parses a backend ISO timestamp (Task.createdAt/updatedAt) into epoch ms, or undefined if it's ever malformed — never a fallback "now", since that would silently fabricate activity that didn't happen. */
+function parseTimestamp(iso: string): number | undefined {
+  const ms = new Date(iso).getTime();
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
 function mapTaskRecordToTask(
   record: TaskRecord,
   projectName: string,
@@ -83,6 +89,8 @@ function mapTaskRecordToTask(
     assigneeId: record.assigneeId ?? undefined,
     comments: [],
     activity: [],
+    createdAt: parseTimestamp(record.createdAt),
+    updatedAt: parseTimestamp(record.updatedAt),
   };
 }
 
@@ -223,6 +231,10 @@ export function TaskProvider({ children }: TaskProviderProps) {
                 assignee,
                 assignees: assignee ? [assignee] : [],
                 assigneeId: updated.assigneeId ?? undefined,
+                // Refreshed straight from the server's own response, so a
+                // status flip to Completed is reflected in the dashboard
+                // chart immediately rather than waiting on a refetch.
+                updatedAt: parseTimestamp(updated.updatedAt) ?? candidate.updatedAt,
               }
             : candidate,
         ),

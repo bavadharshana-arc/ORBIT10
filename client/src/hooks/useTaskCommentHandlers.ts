@@ -6,6 +6,7 @@ import type { WorkspaceActor } from "../types/workspace";
 import type { NewNotification } from "../data/notificationData";
 import { truncateText } from "../data/workspaceData";
 import { getInitials } from "../data/teamData";
+import { withTaskParam } from "../data/systemNotifications";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/workspaceContextValue";
 import { useProjectContext } from "../context/projectContextValue";
@@ -209,7 +210,7 @@ export function useTaskCommentHandlers({
           type: "comment",
           title: `New comment on "${selectedTask.title}"`,
           message: `${currentActor.name} commented: "${truncateText(trimmed, 80)}"`,
-          actionHref: notificationHref,
+          actionHref: withTaskParam(notificationHref, selectedTask.id),
           recipientId: selectedTask.assigneeId,
         });
       }

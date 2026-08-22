@@ -9,6 +9,7 @@ import {
   createNotification as createNotificationRequest,
   updateNotificationRead,
   markAllNotificationsRead as markAllNotificationsReadRequest,
+  deleteNotification as deleteNotificationRequest,
   clearAllNotifications as clearAllNotificationsRequest,
   NOTIFICATION_TYPES as API_NOTIFICATION_TYPES,
   type NotificationApiType,
@@ -165,11 +166,30 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }
 
+  /**
+   * Single-notification delete — the per-row trash action. Same
+   * optimistic-then-restore-on-failure shape as clearAll above (also
+   * destructive/irreversible), just scoped to one id instead of every
+   * notification. Never touches the task/project/comment the deleted
+   * notification referenced — only the Notification row itself.
+   */
+  async function deleteNotification(id: string) {
+    const previous = notifications;
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
+
+    try {
+      await deleteNotificationRequest(id);
+    } catch (err) {
+      console.error("Couldn't delete notification:", err);
+      setNotifications(previous);
+    }
+  }
+
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, isLoading, error, addNotification, markAsRead, markAllAsRead, clearAll }}
+      value={{ notifications, unreadCount, isLoading, error, addNotification, markAsRead, markAllAsRead, deleteNotification, clearAll }}
     >
       {children}
     </NotificationContext.Provider>

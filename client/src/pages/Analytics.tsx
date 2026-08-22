@@ -22,12 +22,11 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceLine,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
 } from "recharts";
 
 import { getDueGroup, getUpcomingTasks, type Status, type Priority, type Task } from "../data/taskData";
@@ -223,11 +222,35 @@ function parseDueDate(dueDate?: string): Date | null {
  * Builds the buckets a trend range is aggregated into, trailing
  * backward from today — day buckets for 7D/30D, week buckets for
  * 3M, calendar-month buckets for 6M/1Y.
+ *
+ * `offsetWindows` shifts the entire window backward by that many
+ * window-lengths before building buckets — offsetWindows=1 gives the
+ * full window immediately preceding the "current" one (same unit,
+ * same bucket count), used by the Productivity section to compare
+ * this period's completion rate against the prior one without
+ * duplicating the bucket math.
  */
-function buildTrendBuckets(range: ChartRange): TrendBucket[] {
+function buildTrendBuckets(range: ChartRange, offsetWindows = 0): TrendBucket[] {
   const config = CHART_RANGE_CONFIG[range];
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  if (offsetWindows > 0) {
+    if (config.unit === "day") {
+      todayStart.setDate(todayStart.getDate() - config.buckets * offsetWindows);
+    } else if (config.unit === "week") {
+      todayStart.setDate(todayStart.getDate() - config.buckets * 7 * offsetWindows);
+    } else {
+      // Force day-of-month to 1 before shifting — setMonth() preserves the
+      // current day-of-month and overflows into the following month when
+      // the target month is shorter (e.g. today the 31st, shifted back
+      // onto a 30-day month), which would silently skew the window by a
+      // month. Safe here because the month branch below only ever reads
+      // todayStart's year/month, never its day.
+      todayStart.setDate(1);
+      todayStart.setMonth(todayStart.getMonth() - config.buckets * offsetWindows);
+    }
+  }
 
   if (config.unit === "day") {
     return Array.from({ length: config.buckets }, (_, index) => {
@@ -404,7 +427,7 @@ function TrendChartCard({ data, range, onRangeChange, completed, total, rangeDes
 
       <div style={{ height: 280, marginTop: 8 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
+          <ComposedChart data={data} margin={{ top: 14, right: 4, left: -18, bottom: 0 }}>
             <defs>
               <linearGradient id="analyticsTotalFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={theme.blue} stopOpacity={0.34} />
@@ -423,7 +446,23 @@ function TrendChartCard({ data, range, onRangeChange, completed, total, rangeDes
               interval={tickInterval}
               tick={{ fill: theme.text3, fontSize: 11 }}
             />
-            <YAxis axisLine={false} tickLine={false} allowDecimals={false} width={26} tick={{ fill: theme.text3, fontSize: 11 }} />
+            {/*
+              No explicit domain previously meant recharts snapped the top
+              tick flush to the real data max — with small integer counts
+              (a handful of tasks/day is common) that puts every real peak
+              exactly on the plot's top edge, which reads as a "spike"
+              rather than a value with headroom above it. `dataMax + 1`
+              reserves one clean tick of breathing room above whatever the
+              real max is, low-volume or high-volume alike.
+            */}
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              width={26}
+              domain={[0, "dataMax + 1"]}
+              tick={{ fill: theme.text3, fontSize: 11 }}
+            />
             <Tooltip
               contentStyle={{ background: tooltipBg, border: "none", borderRadius: 12, fontSize: 12, color: tooltipText, padding: "10px 12px" }}
               labelStyle={{ color: tooltipLabelText, marginBottom: 4, fontWeight: 600 }}
@@ -622,44 +661,317 @@ function ProjectHealthCard({ rows, theme }: { rows: ProjectHealthRow[]; theme: T
 }
 
 /* ============================================================
-   PRODUCTIVITY CARD — completion-rate sparkbar
+   PRODUCTIVITY SECTION — completion rate, trend, breakdown
 ============================================================ */
 
-interface ProductivityCardProps {
-  data: { label: string; total: number; completed: number }[];
-  completionRate: number;
+interface ProductivityStatTileProps {
+  label: string;
+  value: number;
+}
+
+function ProductivityStatTile({ label, value }: ProductivityStatTileProps) {
+  return (
+    <div style={{ background: "var(--surface-2)", borderRadius: 13, padding: "10px 12px", flex: 1, minWidth: 76 }}>
+      <div className="font-display" style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", lineHeight: 1.1 }}>
+        {value}
+      </div>
+      <div className="text-ink-3" style={{ fontSize: 10.5, marginTop: 3, fontWeight: 500 }}>{label}</div>
+    </div>
+  );
+}
+
+interface ComparisonBadgeProps {
+  diff: number;
   theme: ThemeColors;
 }
 
-function ProductivityCard({ data, completionRate, theme }: ProductivityCardProps) {
-  const chartData = data.map((bucket) => ({
-    label: bucket.label,
-    rate: bucket.total > 0 ? Math.round((bucket.completed / bucket.total) * 100) : 0,
-  }));
+function ComparisonBadge({ diff, theme }: ComparisonBadgeProps) {
+  if (diff === 0) {
+    return (
+      <span className="flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: theme.text3 }}>
+        <Minus size={11} strokeWidth={2.4} />
+        Flat vs previous period
+      </span>
+    );
+  }
+
+  const isUp = diff > 0;
+  const Icon = isUp ? TrendingUp : TrendingDown;
 
   return (
-    <div className="bg-card border-soft shadow-float lift fade-in" style={{ borderRadius: 20, padding: 20 }}>
+    <span className="flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: "var(--blue-dark)" }}>
+      <Icon size={11} strokeWidth={2.4} />
+      {Math.abs(diff)}pts {isUp ? "up" : "down"} vs previous period
+    </span>
+  );
+}
+
+interface ProductivityPriorityRow {
+  priority: Priority;
+  total: number;
+  completed: number;
+  rate: number;
+}
+
+interface ProductivityComparison {
+  /** Previous period's task count — 0 means there's nothing to compare against, so no badge is rendered (never fabricate a comparison). */
+  total: number;
+  rate: number | null;
+}
+
+interface ProductivityCardProps {
+  data: { label: string; total: number; completed: number }[];
+  completed: number;
+  total: number;
+  rangeDescription: string;
+  comparison: ProductivityComparison;
+  priorityBreakdown: ProductivityPriorityRow[];
+  isLoading: boolean;
+  theme: ThemeColors;
+  isDark: boolean;
+}
+
+function ProductivityCard({
+  data,
+  completed,
+  total,
+  rangeDescription,
+  comparison,
+  priorityBreakdown,
+  isLoading,
+  theme,
+  isDark,
+}: ProductivityCardProps) {
+  const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const remaining = total - completed;
+  const diff = comparison.rate !== null ? rate - comparison.rate : null;
+  const tickInterval = data.length > 8 ? Math.ceil(data.length / 6) : 0;
+
+  /*
+   * Per-bucket instantaneous rate (that single day's completed ÷ that
+   * single day's total) was the original approach here, but at real
+   * task volumes most day-buckets contain 0 or 1 task — a 1-task ratio
+   * can only ever be exactly 0% or exactly 100%, which reads as noisy
+   * spikes rather than a trend. Plotting the *cumulative* rate instead
+   * (running completed ÷ running total, carried forward through
+   * zero-task days) uses the exact same real per-bucket numbers, stays
+   * defined for every day once any task has occurred (no gaps between
+   * real data points), and its final value is — by construction — the
+   * same 3/8 = 38% already shown as the headline metric.
+   */
+  const runningTotals = data.reduce<{ completed: number; total: number }[]>((acc, bucket) => {
+    const prev = acc[acc.length - 1] ?? { completed: 0, total: 0 };
+    return [...acc, { completed: prev.completed + bucket.completed, total: prev.total + bucket.total }];
+  }, []);
+  const chartData = data.map((bucket, index) => {
+    const { completed: cumulativeCompleted, total: cumulativeTotal } = runningTotals[index];
+    return {
+      label: bucket.label,
+      completed: cumulativeCompleted,
+      total: cumulativeTotal,
+      rate: cumulativeTotal > 0 ? Math.round((cumulativeCompleted / cumulativeTotal) * 100) : null,
+    };
+  });
+
+  const tooltipBg = isDark ? theme.card : theme.text;
+  const tooltipText = isDark ? theme.text : theme.surface;
+  const tooltipLabelText = isDark ? theme.text2 : theme.surface2;
+
+  return (
+    <div className="bg-card border-soft shadow-float lift fade-in" style={{ borderRadius: 22, padding: 20 }}>
       <div className="flex items-center" style={{ justifyContent: "space-between", marginBottom: 3 }}>
-        <h2 className="font-display" style={{ fontSize: 15.5, fontWeight: 560 }}>Productivity</h2>
-        <Gauge size={14} strokeWidth={1.8} color={theme.text3} />
+        <h2 className="font-display" style={{ fontSize: 17, fontWeight: 560 }}>Productivity</h2>
+        <Gauge size={15} strokeWidth={1.8} color={theme.text3} />
       </div>
-      <span className="text-ink-3" style={{ fontSize: 11.5 }}>Avg. completion rate this window</span>
+      <span className="text-ink-3" style={{ fontSize: 11.5 }}>Completion rate &middot; {rangeDescription}</span>
 
-      <div className="font-display" style={{ fontSize: 26, fontWeight: 600, margin: "10px 0 12px", color: "var(--text)" }}>
-        {completionRate}%
-      </div>
+      {isLoading ? (
+        <div className="flex flex-col" style={{ gap: 14, marginTop: 16 }}>
+          {[64, 220, 44].map((h, i) => (
+            <div
+              key={i}
+              className="skeleton-pulse"
+              style={{ height: h, borderRadius: 13, background: "var(--surface-2)" }}
+            />
+          ))}
+        </div>
+      ) : total === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center"
+          style={{ padding: "36px 12px", gap: 6, textAlign: "center" }}
+        >
+          <Gauge size={22} strokeWidth={1.6} color={theme.text3} />
+          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginTop: 4 }}>Not enough data yet</p>
+          <p className="text-ink-3" style={{ fontSize: 12, maxWidth: 320 }}>
+            No tasks are due in this window. Pick a wider chart range above, or add due dates to tasks to see
+            productivity trends here.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col xl:flex-row" style={{ gap: 22, marginTop: 16 }}>
+          {/* LEFT — headline metric, comparison, counts, priority breakdown */}
+          <div className="flex flex-col" style={{ flex: 1, minWidth: 240, gap: 16 }}>
+            <div>
+              <div className="font-display" style={{ fontSize: 34, fontWeight: 600, color: "var(--text)", lineHeight: 1 }}>
+                {rate}%
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {comparison.total > 0 && diff !== null ? (
+                  <ComparisonBadge diff={diff} theme={theme} />
+                ) : (
+                  <span className="text-ink-3" style={{ fontSize: 11 }}>No prior period to compare yet</span>
+                )}
+              </div>
+            </div>
 
-      <div style={{ height: 56 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} barCategoryGap="24%">
-            <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell key={`${entry.label}-${index}`} fill={theme.blueDark} fillOpacity={0.28 + (entry.rate / 100) * 0.6} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+            <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
+              <ProductivityStatTile label="Completed" value={completed} />
+              <ProductivityStatTile label="Remaining" value={remaining} />
+              <ProductivityStatTile label="Total" value={total} />
+            </div>
+
+            <div>
+              <span className="text-ink-3" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase" }}>
+                By priority
+              </span>
+              <div className="flex flex-col" style={{ gap: 10, marginTop: 10 }}>
+                {priorityBreakdown.map((row) => (
+                  <div key={row.priority} style={{ minWidth: 0 }}>
+                    <div className="flex items-center" style={{ justifyContent: "space-between", marginBottom: 5, gap: 8 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-2)" }}>{row.priority}</span>
+                      <span className="text-ink-3" style={{ fontSize: 11 }}>
+                        {row.total === 0 ? "No tasks" : `${row.completed}/${row.total} · ${row.rate}%`}
+                      </span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${row.total > 0 ? row.rate : 0}%`,
+                          height: "100%",
+                          background: "var(--blue-dark)",
+                          borderRadius: 999,
+                          transition: "width 400ms ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT — completion-rate trend */}
+          <div style={{ flex: 1.5, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <span className="text-ink-3" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase" }}>
+              Cumulative rate over time
+            </span>
+            <div style={{ height: 200, marginTop: 8, flex: 1 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {/*
+                  Domain stays a fixed [0, 100] — it's a real percentage, so
+                  zooming the axis into whatever narrow band the data
+                  happens to occupy would exaggerate day-to-day swings that
+                  aren't actually that dramatic. What was actually broken
+                  was headroom: a 6px top / 0px bottom chart margin left no
+                  room for a point sitting at exactly 0% or 100% to render
+                  its dot without touching the plot edge, so real values
+                  looked "clipped" into the axis line. The margin below
+                  fixes that without touching the (correct) domain.
+                */}
+                <ComposedChart data={chartData} margin={{ top: 14, right: 8, left: -24, bottom: 4 }}>
+                  <defs>
+                    <linearGradient id="productivityRateFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={theme.blueDark} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={theme.blueDark} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke={theme.border} />
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={tickInterval}
+                    tick={{ fill: theme.text3, fontSize: 11 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    width={38}
+                    domain={[0, 100]}
+                    ticks={[0, 25, 50, 75, 100]}
+                    tickFormatter={(value) => `${value}%`}
+                    tick={{ fill: theme.text3, fontSize: 11 }}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: theme.border, strokeWidth: 1 }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const point = payload[0].payload as { rate: number | null; completed: number; total: number };
+                      return (
+                        <div style={{ background: tooltipBg, borderRadius: 12, padding: "10px 12px", fontSize: 12, minWidth: 148 }}>
+                          <div style={{ color: tooltipLabelText, fontWeight: 600, marginBottom: 5 }}>{label}</div>
+                          {point.total === 0 ? (
+                            <div style={{ color: tooltipText }}>No tasks due yet</div>
+                          ) : (
+                            <div className="flex flex-col" style={{ gap: 2 }}>
+                              <div style={{ color: tooltipText }}>Completed: {point.completed}</div>
+                              <div style={{ color: tooltipText }}>Total: {point.total}</div>
+                              <div style={{ color: tooltipText, fontWeight: 700, marginTop: 2 }}>Completion rate: {point.rate}%</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  {/*
+                    Not an average of the plotted points — the line itself
+                    is already cumulative, so averaging it would double
+                    over-aggregate. This is the exact same real, current
+                    overall completion rate shown as the card's headline
+                    number (completed ÷ total for the whole window),
+                    plotted as a reference so each day's cumulative value
+                    can be read as "ahead of" or "behind" where things
+                    stand right now — which is also, by construction,
+                    exactly where the line itself ends up on its last point.
+                  */}
+                  <ReferenceLine
+                    y={rate}
+                    stroke={theme.text3}
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    ifOverflow="extendDomain"
+                    label={{
+                      value: `Current ${rate}%`,
+                      position: "insideTopRight",
+                      fill: theme.text3,
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="rate"
+                    name="Completion"
+                    stroke="none"
+                    fill="url(#productivityRateFill)"
+                    connectNulls={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="rate"
+                    name="Completion"
+                    stroke={theme.blueDark}
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: theme.blueDark, stroke: theme.card, strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -752,7 +1064,7 @@ function TaskListCard({ title, icon: Icon, tasks, emptyText, theme, accent }: Ta
 ============================================================ */
 
 export default function Analytics() {
-  const { tasks } = useTaskContext();
+  const { tasks, isLoading } = useTaskContext();
   const [range, setRange] = useState<TimeRange>("all");
   const [chartRange, setChartRange] = useState<ChartRange>("30D");
   const isDark = useIsDarkMode();
@@ -849,6 +1161,48 @@ export default function Analytics() {
       };
     });
   }, [trend.windowTasks, theme]);
+
+  /*
+   * Previous-period completion rate for the Productivity section's
+   * comparison badge — the full window immediately preceding the
+   * current chartRange window (same unit, same bucket count), built
+   * with buildTrendBuckets' offsetWindows so the "previous period"
+   * math can't drift from the trend's own bucketing. `rate` is null
+   * when that prior window has zero tasks due, since there's nothing
+   * real to compare against.
+   */
+  const productivityComparison = useMemo(() => {
+    const prevBuckets = buildTrendBuckets(chartRange, 1);
+    const prevStart = prevBuckets[0].start;
+    const prevEnd = prevBuckets[prevBuckets.length - 1].end;
+
+    const prevTasks = tasks.filter((task) => {
+      const due = parseDueDate(task.dueDate);
+      return due !== null && due >= prevStart && due <= prevEnd;
+    });
+    const prevCompleted = prevTasks.filter((task) => task.status === "Completed").length;
+    const prevTotal = prevTasks.length;
+
+    return {
+      total: prevTotal,
+      rate: prevTotal > 0 ? Math.round((prevCompleted / prevTotal) * 100) : null,
+    };
+  }, [tasks, chartRange]);
+
+  const priorityBreakdown = useMemo(() => {
+    const priorities: Priority[] = ["High", "Medium", "Low"];
+    return priorities.map((priority) => {
+      const priorityTasks = trend.windowTasks.filter((task) => task.priority === priority);
+      const completedCount = priorityTasks.filter((task) => task.status === "Completed").length;
+      const totalCount = priorityTasks.length;
+      return {
+        priority,
+        total: totalCount,
+        completed: completedCount,
+        rate: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+      };
+    });
+  }, [trend.windowTasks]);
 
   const projectHealth = useMemo<ProjectHealthRow[]>(() => {
     const byProject = new Map<string, { total: number; completed: number; overdue: number }>();
@@ -969,12 +1323,21 @@ export default function Analytics() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" style={{ gap: 14, marginTop: 14 }}>
+      <div style={{ marginTop: 14 }}>
         <ProductivityCard
           data={trend.data}
-          completionRate={trend.totalCount > 0 ? Math.round((trend.completedCount / trend.totalCount) * 100) : 0}
+          completed={trend.completedCount}
+          total={trend.totalCount}
+          rangeDescription={CHART_RANGE_CONFIG[chartRange].description}
+          comparison={productivityComparison}
+          priorityBreakdown={priorityBreakdown}
+          isLoading={isLoading}
           theme={theme}
+          isDark={isDark}
         />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14, marginTop: 14 }}>
         <TaskListCard
           title="Overdue"
           icon={AlertTriangle}

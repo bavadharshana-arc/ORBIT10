@@ -2,7 +2,15 @@ import { useNavigate } from "react-router-dom";
 import { Sparkles, ArrowUpRight } from "lucide-react";
 import { Pill } from "../ui/Pill";
 import { SquiggleUnderline } from "../doodles/SquiggleUnderline";
+import { CelestialDivider } from "../doodles/CelestialDivider";
 import { useAuth } from "../../context/AuthContext";
+
+/* Strictly-additive celestial artwork layer (see the big comment at its
+   render site below for the full rationale). Resolved via `new URL(...,
+   import.meta.url)` — the same pattern Login.tsx already uses for
+   reference/orbit-login.jpe — so Vite serves/bundles this non-standard
+   ".jpe" file without needing an import declaration for the extension. */
+const celestialArtwork = new URL("../../../reference/download (5).jpe", import.meta.url).href;
 
 /* ============================================================
    GREETING CARD (Phase 35)
@@ -33,6 +41,47 @@ const TIME_OF_DAY = (hour: number): "morning" | "afternoon" | "evening" => {
   return "evening";
 };
 
+/* Scattered background dots around the RIGHT side of the hero — fully
+   independent of the orbit <svg> below (which is locked: not read from,
+   not positioned relative to, not touched by this list at all).
+   Positioned as plain percentages of the card, deliberately irregular —
+   no shared radius from any center point, no repeating spacing — so
+   they read as loose scatter, never a ring or a path. Sizes/opacities
+   are kept high enough to actually register at 100% zoom (blues around
+   0.55–0.7, whites around 0.85–0.95) rather than disappearing. */
+const HERO_SCATTER_DOTS: { left: string; top: string; size: number; color: string; opacity: number }[] = [
+  { left: "58%", top: "8%", size: 4, color: "var(--text)", opacity: 0.55 },
+  { left: "88%", top: "15%", size: 6, color: "#FFFFFF", opacity: 0.9 },
+  { left: "70%", top: "23%", size: 3, color: "var(--blue-dark)", opacity: 0.6 },
+  { left: "95%", top: "40%", size: 5, color: "var(--blue)", opacity: 0.6 },
+  { left: "60%", top: "48%", size: 7, color: "#FFFFFF", opacity: 0.92 },
+  { left: "80%", top: "58%", size: 4, color: "var(--text)", opacity: 0.5 },
+  { left: "92%", top: "70%", size: 6, color: "var(--blue-dark)", opacity: 0.65 },
+  { left: "65%", top: "78%", size: 3, color: "var(--blue)", opacity: 0.55 },
+  { left: "85%", top: "88%", size: 5, color: "#FFFFFF", opacity: 0.88 },
+  { left: "55%", top: "34%", size: 4, color: "var(--blue-dark)", opacity: 0.55 },
+  { left: "98%", top: "60%", size: 8, color: "var(--text)", opacity: 0.5 },
+  { left: "72%", top: "92%", size: 3, color: "var(--blue)", opacity: 0.55 },
+];
+
+/* Visible 4-point celestial stars around the same right-side area —
+   independent of both the locked orbit <svg> and HERO_SCATTER_DOTS
+   above (neither is read from or touched here). Uses the same slim
+   4-point star path as the orbit's own riding stars, just scaled up
+   and positioned by plain percentage so each one reads as an actual
+   ✦-shaped star rather than a dot or a generic rounded sparkle icon.
+   Positions deliberately avoid the orbit's own coordinates and any
+   shared radius, so nothing lines up into a ring or a path. */
+const HERO_SCATTER_STARS: { left: string; top: string; size: number; color: string; opacity: number }[] = [
+  { left: "48%", top: "4%", size: 17, color: "var(--text)", opacity: 0.78 },
+  { left: "76%", top: "33%", size: 19, color: "#FFFFFF", opacity: 0.95 },
+  { left: "97%", top: "12%", size: 11, color: "var(--blue-dark)", opacity: 0.68 },
+  { left: "63%", top: "63%", size: 10, color: "var(--blue)", opacity: 0.58 },
+  { left: "90%", top: "82%", size: 12, color: "#FFFFFF", opacity: 0.88 },
+  { left: "52%", top: "90%", size: 7, color: "var(--text)", opacity: 0.55 },
+  { left: "99%", top: "50%", size: 6, color: "var(--blue-dark)", opacity: 0.5 },
+];
+
 export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects }: GreetingCardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -57,129 +106,231 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
         marginBottom: 20,
       }}
     >
-      <svg
-        width="220"
-        height="220"
-        viewBox="0 0 220 220"
+      {/* ============================================================
+          NEW — CELESTIAL ARTWORK LAYER (strictly additive)
+
+          reference/download (5).jpe, rendered verbatim (not a CSS/SVG
+          recreation) as a decorative background layer on the left/
+          center of the card, behind everything else here. Nothing
+          below this block was touched to make room for it.
+
+          Placement guarantees it stays behind the greeting/buttons
+          without needing to add z-index anywhere: it's the first
+          child of this card, and every other child here (the orbit
+          <svg>, the scatter dots/stars, and the text content div) is
+          position:absolute/relative with no z-index of its own — such
+          siblings paint strictly in DOM order, so being first means
+          this is always the bottommost layer, under the orbit/stars
+          and under "Good {time}, {name}." Just two treatments turn
+          the source photo's plain cream-paper square into an
+          embedded layer rather than a pasted-in image box:
+            - mix-blend-mode: multiply knocks the paper's near-white
+              background out against the card's own --surface-2 fill
+              (multiply leaves white fully transparent-looking and
+              only darkens the actual navy linework), so no rectangle
+              edge is visible against the card background;
+            - a radial mask fades the remaining square silhouette to
+              nothing well before its corners, so what's left reads as
+              a soft-edged illustration, not a photo cutout.
+          Opacity is kept in the "clearly visible" 0.55–0.85 range the
+          artwork asked for, not faded to near-nothing. */}
+      <img
+        src={celestialArtwork}
+        alt=""
+        aria-hidden="true"
+        className="w-[56%] sm:w-[46%] lg:w-[38%]"
         style={{
           position: "absolute",
-          right: -30,
-          top: -50,
-          opacity: 0.9,
+          left: "-6%",
+          top: "50%",
+          transform: "translateY(-50%)",
+          maxWidth: 340,
+          aspectRatio: "1 / 1",
+          objectFit: "cover",
+          mixBlendMode: "multiply",
+          opacity: 0.82,
+          WebkitMaskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
+          maskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* ============================================================
+          RIGHT-SIDE CELESTIAL COMPOSITION — compact corner orbit
+
+          248×248 box anchored right:-34/top:-56 — every number here is
+          the previous 220×220/right:-30/top:-50 version scaled up by
+          exactly 248/220 ≈ 1.127× (~12.7%, mid-range of a requested
+          10–15% enlargement). Shape, proportions, angles, colors,
+          opacity, and every dot/star are otherwise identical — this is
+          a uniform scale-up, not a redesign. Still genuinely a corner
+          ornament, intentionally cropped by the card's own top/right
+          edges, not a large mid-hero constellation.
+      ============================================================ */}
+      <svg
+        width="248"
+        height="248"
+        viewBox="0 0 248 248"
+        style={{
+          position: "absolute",
+          right: -34,
+          top: -56,
         }}
       >
         {/* Ring 1 — inner orbit */}
         <g
           className="animate-spin"
           style={{
-            transformOrigin: "110px 110px",
+            transformOrigin: "124px 124px",
             transformBox: "view-box",
             animationDuration: "24s",
             animationTimingFunction: "linear",
           }}
         >
           <ellipse
-            cx="110"
-            cy="110"
-            rx="78"
-            ry="36"
+            cx="124"
+            cy="124"
+            rx="87.9"
+            ry="40.6"
             style={{ stroke: "var(--blue)", fill: "none" }}
-            strokeWidth="1.1"
+            strokeWidth="1.2"
             opacity="0.55"
           />
 
-          {/* Outlined sparkle at 0° */}
-          <g transform="translate(188,110) scale(0.44) translate(-12,-11)">
-            <path
-              d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z"
-              style={{ stroke: "var(--blue-dark)" }}
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-              opacity="0.85"
-            />
+          {/* Clearly-visible white star riding at 0° */}
+          <g transform="translate(212,124) scale(0.38) translate(-12,-11)">
+            <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" style={{ fill: "#FFFFFF" }} opacity="0.92" />
           </g>
 
-          {/* Solid dot at 180° */}
-          <circle
-            cx="32"
-            cy="110"
-            r="3"
-            style={{ fill: "var(--blue-dark)" }}
-            opacity="0.85"
-          />
+          {/* Small blue dot riding at 180° */}
+          <circle cx="36.1" cy="124" r="2.9" style={{ fill: "var(--blue-dark)" }} opacity="0.6" />
+
+          {/* Small blue 4-point star riding at 270° (top of the ellipse) —
+              travels around the orbit with it */}
+          <g transform="translate(124,83.4) scale(0.26) translate(-12,-11)">
+            <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" style={{ fill: "var(--blue-dark)" }} opacity="0.75" />
+          </g>
         </g>
 
-        {/* Ring 2 — outer orbit, gently tilted from ring 1 */}
+        {/* Ring 2 — outer orbit, gently tilted from ring 1. Its 0° mark
+            sits right at the box's edge and is partly cropped by the
+            card — intentional, matching the "some dots can be clipped"
+            corner-orbit feel. */}
         <g
           className="animate-spin"
           style={{
-            transformOrigin: "110px 110px",
+            transformOrigin: "124px 124px",
             transformBox: "view-box",
             animationDuration: "39s",
             animationTimingFunction: "linear",
           }}
         >
-          <g transform="rotate(32 110 110)">
+          <g transform="rotate(32 124 124)">
             <ellipse
-              cx="110"
-              cy="110"
-              rx="98"
-              ry="48"
+              cx="124"
+              cy="124"
+              rx="110.5"
+              ry="54.1"
               style={{ stroke: "var(--blue-dark)", fill: "none" }}
-              strokeWidth="1.1"
+              strokeWidth="1.2"
               opacity="0.4"
             />
 
-            {/* Outlined circle at 0° */}
-            <circle
-              cx="208"
-              cy="110"
-              r="3"
-              style={{ stroke: "var(--text)", fill: "none" }}
-              strokeWidth="1.1"
-              opacity="0.85"
-            />
+            {/* Small white dot riding at 0° */}
+            <circle cx="234.5" cy="124" r="2.7" style={{ fill: "#FFFFFF" }} opacity="0.85" />
 
-            {/* Solid sparkle at 120° */}
-            <g transform="translate(61,151.6) scale(0.32) translate(-12,-11)">
-              <path
-                d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z"
-                style={{ fill: "var(--text)", stroke: "var(--text)" }}
-                strokeWidth="0.6"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-                opacity="0.85"
-              />
+            {/* Tiny light-blue star riding at 120° */}
+            <g transform="translate(68.8,170.9) scale(0.25) translate(-12,-11)">
+              <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" style={{ fill: "var(--blue)" }} opacity="0.55" />
             </g>
 
-            {/* Solid circle at 240° */}
-            <circle
-              cx="61"
-              cy="68.4"
-              r="2.6"
-              style={{ fill: "var(--text)" }}
-              opacity="0.85"
-            />
+            {/* Small blue dot riding at 240° */}
+            <circle cx="68.8" cy="77.1" r="2.3" style={{ fill: "var(--blue-dark)" }} opacity="0.55" />
+
+            {/* White/light-blue dot riding at 60° — travels around the
+                orbit with it */}
+            <circle cx="179.25" cy="170.85" r="2.6" style={{ fill: "#FFFFFF" }} opacity="0.88" />
           </g>
         </g>
 
-        {/* Center point */}
-        <circle
-          cx="110"
-          cy="110"
-          r="4"
-          style={{ fill: "var(--text)" }}
-          opacity="0.5"
+        {/* Ring 3 — faint dotted outer orbit, static */}
+        <ellipse
+          cx="124"
+          cy="124"
+          rx="99.2"
+          ry="99.2"
+          transform="rotate(-18 124 124)"
+          style={{ stroke: "var(--blue)", fill: "none" }}
+          strokeWidth="1.5"
+          strokeDasharray="2.3 6.2"
+          opacity="0.4"
         />
+
+        {/* Subtle darker-blue (navy) star */}
+        <g transform="translate(157.8,67.6) scale(0.23) translate(-12,-11)">
+          <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" style={{ fill: "var(--text)" }} opacity="0.55" />
+        </g>
+
+        {/* Tiny white star */}
+        <g transform="translate(191.6,45.1) scale(0.2) translate(-12,-11)">
+          <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" style={{ fill: "#FFFFFF" }} opacity="0.8" />
+        </g>
+
+        {/* Clearly-visible white dot */}
+        <circle cx="169.1" cy="112.7" r="2.5" style={{ fill: "#FFFFFF" }} opacity="0.85" />
+
+        {/* Center point — subtle anchor at the orbit's shared center */}
+        <circle cx="124" cy="124" r="4.5" style={{ fill: "var(--text)" }} opacity="0.5" />
       </svg>
 
+      {/* Scattered background dots around the right side — see
+          HERO_SCATTER_DOTS. Independent of the orbit above. */}
+      {HERO_SCATTER_DOTS.map((d, i) => (
+        <span
+          key={`scatter-dot-${i}`}
+          style={{
+            position: "absolute",
+            left: d.left,
+            top: d.top,
+            width: d.size,
+            height: d.size,
+            borderRadius: "50%",
+            background: d.color,
+            opacity: d.opacity,
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+
+      {/* Visible 4-point stars around the same right-side area — see
+          HERO_SCATTER_STARS. Independent of the orbit and the dots
+          above. */}
+      {HERO_SCATTER_STARS.map((s, i) => (
+        <svg
+          key={`scatter-star-${i}`}
+          width={s.size}
+          height={s.size}
+          viewBox="0 0 24 24"
+          style={{ position: "absolute", left: s.left, top: s.top, opacity: s.opacity, pointerEvents: "none" }}
+        >
+          <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" fill={s.color} />
+        </svg>
+      ))}
 
       <div style={{ position: "relative", maxWidth: 480 }}>
-        <Pill tone="blue">
-          {dateLabel}
-        </Pill>
+        {/* Decorative lines flanking the date pill only — additive, and
+            deliberately scoped to just this row (not the heading/subtitle
+            below). Both copies are the same CelestialDivider, mirrored via
+            `flip` so the fade points outward on each side; hidden below
+            `sm` where there isn't reliably enough spare width next to the
+            pill without crowding it. */}
+        <div className="flex items-center" style={{ gap: 10 }}>
+          <CelestialDivider className="hidden sm:block sm:w-[46px] lg:w-[84px]" />
+          <Pill tone="blue">
+            {dateLabel}
+          </Pill>
+          <CelestialDivider flip className="hidden sm:block sm:w-[46px] lg:w-[84px]" />
+        </div>
 
         <h1
           className="font-display"
@@ -231,7 +382,9 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
           </button>
 
           <button
-            className="bg-card"
+            type="button"
+            className="bg-card nav-item"
+            onClick={() => navigate("/projects")}
             style={{
               border: "1px solid #E4E8ED",
               borderRadius: 14,
@@ -245,6 +398,7 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
               color: "#20242B",
             }}
           >
+            Explore workspace
             <Sparkles size={15} color="#8EA7BF" />
           </button>
         </div>

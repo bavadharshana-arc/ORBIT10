@@ -53,6 +53,11 @@ export function markAllNotificationsRead(): Promise<void> {
   return apiPost<void>(`${BASE}/read-all`);
 }
 
+/** Deletes a single notification — the per-row trash action. Distinct from clearAllNotifications below (which wipes every notification) and never touches the task/project/comment the notification referenced. */
+export function deleteNotification(notificationId: string): Promise<void> {
+  return apiDelete(`${BASE}/${notificationId}`);
+}
+
 export function clearAllNotifications(): Promise<void> {
   return apiDelete(BASE);
 }

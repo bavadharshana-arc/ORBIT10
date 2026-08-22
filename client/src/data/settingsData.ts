@@ -36,19 +36,9 @@ export interface AppearanceSettings {
   reduceMotion: boolean;
 }
 
-export interface SessionEntry {
-  id: string;
-  device: string;
-  browser: string;
-  location: string;
-  lastActive: string;
-  current: boolean;
-}
-
 export interface SecuritySettings {
   twoFactorEnabled: boolean;
   passwordUpdatedAt: string | null;
-  sessions: SessionEntry[];
 }
 
 export interface OrbitSettings {
@@ -134,32 +124,6 @@ const DEFAULT_SETTINGS: OrbitSettings = {
   security: {
     twoFactorEnabled: false,
     passwordUpdatedAt: null,
-    sessions: [
-      {
-        id: "session-1",
-        device: "MacBook Pro",
-        browser: "Chrome on macOS",
-        location: "San Francisco, CA",
-        lastActive: "Active now",
-        current: true,
-      },
-      {
-        id: "session-2",
-        device: "iPhone 15",
-        browser: "Safari on iOS",
-        location: "San Francisco, CA",
-        lastActive: "2 hours ago",
-        current: false,
-      },
-      {
-        id: "session-3",
-        device: "Windows PC",
-        browser: "Edge on Windows",
-        location: "Austin, TX",
-        lastActive: "3 days ago",
-        current: false,
-      },
-    ],
   },
 };
 
@@ -177,11 +141,7 @@ function mergeSettings(partial: Partial<OrbitSettings> | null): OrbitSettings {
   return {
     notifications: { ...DEFAULT_SETTINGS.notifications, ...partial.notifications },
     appearance: { ...DEFAULT_SETTINGS.appearance, ...partial.appearance },
-    security: {
-      ...DEFAULT_SETTINGS.security,
-      ...partial.security,
-      sessions: partial.security?.sessions ?? DEFAULT_SETTINGS.security.sessions,
-    },
+    security: { ...DEFAULT_SETTINGS.security, ...partial.security },
   };
 }
 
@@ -232,6 +192,67 @@ export function applyAppearance(appearance: AppearanceSettings): void {
 }
 
 
+
+/* ============================================================
+   CURRENT SESSION (Settings -> Security -> Active sessions)
+
+   Orbit's auth is stateless JWT with no server-side session/device
+   store (no Session model, no login-history table) — there is no real
+   backend data source for "other devices signed in". Rather than
+   display a fabricated multi-device list (the previous implementation
+   hardcoded a MacBook/iPhone/Windows PC trio that never reflected
+   anything real), this derives a best-effort label for the one session
+   Orbit actually knows about — the browser it's running in right now —
+   from navigator.userAgent. Not persisted: it isn't a preference, it's
+   a live fact about the current browser, recomputed on every read.
+============================================================ */
+
+export interface CurrentSession {
+  device: string;
+  browser: string;
+}
+
+export function getCurrentSession(): CurrentSession {
+  if (typeof navigator === "undefined" || !navigator.userAgent) {
+    return { device: "This device", browser: "Unknown browser" };
+  }
+
+  const ua = navigator.userAgent;
+
+  const browserName = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\//.test(ua)
+      ? "Opera"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Chrome\//.test(ua) && !/Chromium\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua) && !/Chrome\//.test(ua)
+            ? "Safari"
+            : "your browser";
+
+  const platformName = /Windows/.test(ua)
+    ? "Windows"
+    : /Mac OS X/.test(ua)
+      ? "macOS"
+      : /Android/.test(ua)
+        ? "Android"
+        : /iPhone|iPad|iPod/.test(ua)
+          ? "iOS"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "an unknown platform";
+
+  const device = /iPad/.test(ua)
+    ? "iPad"
+    : /iPhone/.test(ua)
+      ? "iPhone"
+      : /Android/.test(ua)
+        ? "Android device"
+        : "This device";
+
+  return { device, browser: `${browserName} on ${platformName}` };
+}
 
 export function formatDatePreview(date: Date, format: DateFormat): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");

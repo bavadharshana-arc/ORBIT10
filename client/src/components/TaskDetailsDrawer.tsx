@@ -807,11 +807,69 @@ export function TaskDetailsDrawer({
      DO NOT RENDER
   ============================================================ */
 
-  if (
-    !isOpen ||
-    !task
-  ) {
+  if (!isOpen) {
     return null;
+  }
+
+  /*
+   * `isOpen` and `task` are the same boolean at every existing call site
+   * (each passes `isOpen={selectedTask !== null}`), so this never fires
+   * there — kept for a caller that instead opens on "a task id was
+   * selected" (`isOpen={selectedTaskId !== null}`), where the id can
+   * point at a task that's since been deleted, or hasn't loaded yet.
+   * Rather than rendering a blank drawer in that case, show a small,
+   * explicit fallback instead of nothing.
+   */
+  if (!task) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+        <div
+          onClick={onClose}
+          style={{ position: "absolute", inset: 0, background: "rgba(32,36,43,0.32)" }}
+        />
+        <div
+          className="bg-card shadow-float-lg fade-in flex flex-col items-center justify-center"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "100%",
+            width: "100%",
+            maxWidth: 460,
+            padding: 24,
+            textAlign: "center",
+            gap: 6,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close task details"
+            style={{
+              position: "absolute",
+              top: 24,
+              right: 24,
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              border: "none",
+              background: "#EEF2F6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#667085",
+            }}
+          >
+            <X size={15} />
+          </button>
+          <span style={{ fontSize: 14, fontWeight: 650, color: "#20242B" }}>Task not found</span>
+          <span className="text-ink-3" style={{ fontSize: 12, maxWidth: 260 }}>
+            This task may have been deleted, or it isn't available anymore.
+          </span>
+        </div>
+      </div>
+    );
   }
 
   /* ============================================================

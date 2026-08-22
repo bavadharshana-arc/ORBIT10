@@ -3,6 +3,7 @@ import { authMiddleware } from "../middleware/auth.middleware";
 import {
   clearAll,
   createNotification,
+  deleteNotification,
   listNotifications,
   markAllRead,
   updateNotification,
@@ -23,6 +24,7 @@ router.post("/", authMiddleware, createNotification);
 router.get("/", authMiddleware, listNotifications);
 router.patch("/:notificationId", authMiddleware, updateNotification);
 router.post("/read-all", authMiddleware, markAllRead);
+router.delete("/:notificationId", authMiddleware, deleteNotification);
 router.delete("/", authMiddleware, clearAll);
 
 export default router;
