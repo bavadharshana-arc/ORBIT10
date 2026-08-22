@@ -19,7 +19,7 @@ import type { ActivityDatum, UpcomingEvent } from "../types/dashboard";
 import { buildMonthGrid, groupTasksByDay, formatDateKey } from "../data/calendarGrid";
 import { getDueGroup, getUpcomingTasks } from "../data/taskData";
 import { getProjectStatus, getUpcomingProjects } from "../data/projectData";
-import { getProjectCreatedAt, getTaskCompletedAt } from "../data/workspaceData";
+import { getProjectCreatedAt, getTaskCreatedAt, getTaskCompletedAt } from "../data/workspaceData";
 import { startOfDay, addDays, isSameDay, parseIsoDate, formatShortDate } from "../components/timeline/GanttTimeline";
 import { useTaskContext } from "../context/taskContextValue";
 import { useProjectContext } from "../context/projectContextValue";
@@ -127,11 +127,21 @@ export default function Dashboard() {
   );
 
   /* ==========================================================
-     WEEKLY ACTIVITY — tasks completed per day over the trailing 7
-     days, read straight off each task's own activity log via
-     getTaskCompletedAt() (the same helper the Project Analytics
-     velocity chart uses) rather than a second activity data source.
+     WEEKLY ACTIVITY — tasks created vs. completed per day over the
+     trailing 7 days, read straight off each task's own real
+     timestamps via getTaskCreatedAt()/getTaskCompletedAt() (the same
+     completion helper the Project Analytics velocity chart uses)
+     rather than a second, hardcoded activity data source.
   ========================================================== */
+
+  const createdAtByTaskId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const task of tasks) {
+      const createdAt = getTaskCreatedAt(task);
+      if (createdAt !== null) map.set(task.id, createdAt);
+    }
+    return map;
+  }, [tasks]);
 
   const completedAtByTaskId = useMemo(() => {
     const map = new Map<string, number>();
@@ -144,19 +154,26 @@ export default function Dashboard() {
 
   const weeklyActivityData = useMemo<ActivityDatum[]>(() => {
     const todayStart = startOfDay(today);
+    const creations = [...createdAtByTaskId.values()];
     const completions = [...completedAtByTaskId.values()];
 
     return Array.from({ length: 7 }, (_, index) => {
       const day = addDays(todayStart, index - 6);
       return {
         day: day.toLocaleDateString("en-US", { weekday: "short" }),
-        tasks: completions.filter((ms) => isSameDay(new Date(ms), day)).length,
+        created: creations.filter((ms) => isSameDay(new Date(ms), day)).length,
+        completed: completions.filter((ms) => isSameDay(new Date(ms), day)).length,
       };
     });
-  }, [completedAtByTaskId, today]);
+  }, [createdAtByTaskId, completedAtByTaskId, today]);
+
+  const createdThisWeek = useMemo(
+    () => weeklyActivityData.reduce((sum, entry) => sum + entry.created, 0),
+    [weeklyActivityData]
+  );
 
   const completedThisWeek = useMemo(
-    () => weeklyActivityData.reduce((sum, entry) => sum + entry.tasks, 0),
+    () => weeklyActivityData.reduce((sum, entry) => sum + entry.completed, 0),
     [weeklyActivityData]
   );
 
@@ -230,14 +247,18 @@ export default function Dashboard() {
           label="Active projects"
           value={String(activeProjects.length)}
           delta={newActiveProjectsThisWeek > 0 ? `+${newActiveProjectsThisWeek} this wk` : undefined}
+          trendUp={newActiveProjectsThisWeek > 0}
           icon={FolderKanban}
+          graphic="trend"
         />
 
         <StatCard
           label="Tasks due today"
           value={String(tasksDueToday)}
           delta={overdueTaskCount > 0 ? `${overdueTaskCount} overdue` : undefined}
+          deltaDot={overdueTaskCount > 0}
           icon={CheckSquare}
+          graphic="checklist"
         />
 
         <StatCard
@@ -245,13 +266,16 @@ export default function Dashboard() {
           value={`${completionRate}%`}
           icon={TrendingUp}
           ring={completionRate}
+          graphic="bars"
         />
 
         <StatCard
           label="Tasks in progress"
           value={String(inProgressTasks.length)}
           delta={highPriorityInProgressCount > 0 ? `${highPriorityInProgressCount} high priority` : undefined}
+          trendUp={highPriorityInProgressCount > 0}
           icon={Clock3}
+          graphic="target"
         />
       </div>
 
@@ -263,6 +287,7 @@ export default function Dashboard() {
           <ProjectsWidget />
           <ActivityChart
             data={weeklyActivityData}
+            createdThisWeek={createdThisWeek}
             completedThisWeek={completedThisWeek}
             changeVsLastWeekPct={changeVsLastWeekPct}
           />

@@ -68,10 +68,11 @@ export interface Project {
   memberRoles?: Record<string, ProjectPermission>;
 }
 
-/** One day's worth of completed-task volume, used by the activity chart. */
+/** One day's worth of task activity for the dashboard's activity chart — both counts read live off real Task timestamps (getTaskCreatedAt/getTaskCompletedAt in workspaceData.ts), never fabricated. */
 export interface ActivityDatum {
   day: string;
-  tasks: number;
+  created: number;
+  completed: number;
 }
 
 /** An item in the "Upcoming" events list. Named to avoid clashing with the DOM's global `Event`. */

@@ -86,7 +86,7 @@ function ProjectRow({ project, people, onSelect }: ProjectRowProps) {
         </div>
         <div className="flex items-center" style={{ gap: 5, marginTop: 5, justifyContent: "flex-end" }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: getStatusColor(project.progress), flexShrink: 0 }} />
-          <span className="text-ink-3" style={{ fontSize: 11 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)" }}>
             {project.progress}%
           </span>
         </div>

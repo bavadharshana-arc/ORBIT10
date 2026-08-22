@@ -473,6 +473,75 @@ function MiniCalendar({
 // Left sidebar — Selected day panel
 // ============================================================================
 
+/** The three event types the Selected Day summary chips count — milestones
+ * are deliberately left out of the chip row (the reference only asks for
+ * Task/Meeting/Deadline) but still render normally in the list below. */
+const SUMMARY_TYPES: readonly EventType[] = ["task", "meeting", "deadline"];
+
+/** Same literal per-type accents as EVENT_META's own `dot` background
+ * colors above (task #8EA7BF, meeting #AFC5DA, deadline #667085) — just
+ * applied as an icon stroke color instead of a filled dot, so the chips
+ * carry no colors that don't already exist elsewhere on this page. */
+const SUMMARY_ICON_COLOR: Record<EventType, string> = {
+  task: "text-[#8EA7BF]",
+  meeting: "text-[#AFC5DA]",
+  deadline: "text-[#667085]",
+  milestone: "text-[#20242B]",
+};
+
+/** "3 Tasks" / "1 Meeting" / "0 Deadlines" — EVENT_META's label is always
+ * singular, so pluralize here rather than hardcoding each chip's text. */
+function formatSummaryLabel(type: EventType, count: number): string {
+  const label = EVENT_META[type].label;
+  return `${count} ${count === 1 ? label : `${label}s`}`;
+}
+
+function SelectedDaySummary({ events }: { events: CalendarEvent[] }) {
+  // Counts come straight from the same `events` (selectedDayEvents) the
+  // list below already renders — same source, same date-matching logic
+  // (eventsByDate in Calendar()), so this never drifts from what's
+  // actually shown, and updates automatically whenever the selected day
+  // or the underlying task/event data changes.
+  const counts = useMemo(() => {
+    const tally: Record<EventType, number> = { task: 0, meeting: 0, deadline: 0, milestone: 0 };
+    for (const event of events) {
+      tally[event.type] += 1;
+    }
+    return tally;
+  }, [events]);
+
+  return (
+    // flex-nowrap + items-center: always one straight horizontal row, on
+    // the 260px desktop sidebar (the tightest case — the panel is full
+    // width everywhere below the lg breakpoint, so this is the narrowest
+    // this row is ever actually laid out at) and everywhere else. Sized
+    // with real margin to spare at that width (see the size math in the
+    // PR notes) rather than right at the edge, and each chip is still a
+    // shrink/min-w-0 flex item with a truncating label as a last-resort
+    // safety net — if space ever gets *truly* too tight (an extreme
+    // zoomed-in or squeezed viewport) a chip's text clips with an
+    // ellipsis instead of wrapping to a new line or overflowing the panel.
+    <div className="mt-2.5 flex flex-nowrap items-center gap-0.5">
+      {SUMMARY_TYPES.map((type) => {
+        const meta = EVENT_META[type];
+        const Icon = meta.icon;
+        const count = counts[type];
+        return (
+          <div
+            key={type}
+            className="flex min-w-0 shrink items-center gap-1 rounded-lg border border-soft bg-surface px-1 py-1"
+          >
+            <Icon className={`h-2.5 w-2.5 shrink-0 ${SUMMARY_ICON_COLOR[type]}`} strokeWidth={2.25} />
+            <span className="min-w-0 truncate whitespace-nowrap text-[10px] font-medium text-[#667085]">
+              {formatSummaryLabel(type, count)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SelectedDayPanel({
   date,
   events,
@@ -492,7 +561,9 @@ function SelectedDayPanel({
         {formatLongDate(date)}
       </p>
 
-      <div className="mt-3 flex flex-col gap-2">
+      <SelectedDaySummary events={events} />
+
+      <div className="mt-3 flex flex-col gap-2 border-t border-soft pt-3">
         {events.length === 0 ? (
           <p className="rounded-lg border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
             No events scheduled for this day.

@@ -13,6 +13,20 @@
   --card: #ffffff;
   --blue: #afc5da;
   --blue-dark: #8ea7bf;
+  /* A clearly-blue tint (distinct from the neutral --surface-2 gray) for
+     icon chips/badges that need to read as blue at a glance rather than
+     just "light gray". Hand-tuned per theme rather than color-mix()'d,
+     to match how every other token pair here is authored. */
+  --blue-tint: #e3ebf2;
+  /* Deepest step in the blue family — for the Tasks page's monochromatic
+     priority/urgency hierarchy (High priority, Overdue/Due-today), where
+     emphasis has to come from a darker/stronger shade of ORBIT blue
+     rather than a different hue entirely. */
+  --blue-deep: #3f5b74;
+  /* Lowest-contrast step — a blue deliberately desaturated toward
+     --text-3, for states that should read as "done"/faded (Completed)
+     without dropping out of the blue family into plain gray. */
+  --blue-muted: #a9b7c2;
   --border: #e4e8ed;
   --text: #20242b;
   --text-2: #667085;
@@ -142,6 +156,22 @@
 .fade-in-static {
   animation: fade-in-opacity 480ms ease both;
 }
+
+/* Gentle breathing placeholder for card content that's still loading
+   (e.g. Analytics' Productivity section) — reuses the same easing feel
+   as the rest of these motion utilities rather than a hard blink. */
+.skeleton-pulse {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @keyframes fade-in-opacity {
   from {
     opacity: 0;
@@ -169,6 +199,12 @@ html[data-theme="dark"] .orbit-root {
   --card: #1e232b;
   --blue: #3f5064;
   --blue-dark: #6f8aa3;
+  --blue-tint: #2d3745;
+  /* Emphasis flips direction against a dark surface — lighter/brighter
+     reads as "stronger" here, the same relationship every other token
+     pair above already keeps between the two themes. */
+  --blue-deep: #a9c4dc;
+  --blue-muted: #4f5c68;
   --border: #2a2f38;
   --text: #edeff3;
   --text-2: #a7aebb;
@@ -180,4 +216,132 @@ html[data-motion="reduced"] .orbit-root *::before,
 html[data-motion="reduced"] .orbit-root *::after {
   transition: none !important;
   animation: none !important;
+}
+
+/* ------------------------------------------------------------------
+   FOCUS RING
+   Keyboard-focus outline for interactive elements styled entirely via
+   inline `style` (buttons, swatches, toggles) — inline styles can't
+   express :focus-visible, so this is the one piece that has to live in
+   CSS. Only shows for keyboard/programmatic focus, never on mouse
+   click, matching native browser :focus-visible behavior.
+------------------------------------------------------------------- */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--blue-dark);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------
+   SETTINGS
+   Premium-SaaS-style primitives for the Settings pages only (row
+   groups, refined inputs, compact buttons, selectable option cards).
+   Scoped with a `.settings-` prefix and consumed only from
+   src/components/settings/* and src/pages/Settings.tsx — never applied
+   to the shared SectionCard/Field/primaryButtonStyle/etc. that
+   ProjectSettingsTab.tsx (Projects page) also reuses, so none of this
+   touches anything outside Settings.
+
+   Hover/:focus-visible states live here rather than inline `style`
+   because inline declarations always win the cascade over an external
+   rule for the same property, hover or not — see FOCUS RING above for
+   the same constraint. Two ways that's handled below, per property:
+   either the matching src/components/settings/styles.ts token never
+   sets that property inline at all (box-shadow, opacity, and
+   border-color/background for inputs and the secondary/ghost-danger
+   buttons — those live here as the CSS-owned resting state too, not
+   just the hover/focus variant), or — for the one compound field where
+   the class sits on a non-focusable wrapper `<div>` — :focus-within
+   stands in for :focus-visible, which can only ever match the actual
+   focused element.
+------------------------------------------------------------------- */
+
+.settings-row {
+  transition: background 140ms ease;
+}
+.settings-row:hover {
+  background: var(--surface);
+}
+.settings-group > .settings-row + .settings-row {
+  border-top: 1px solid var(--border);
+}
+
+.settings-input {
+  border-color: var(--border);
+  background: var(--surface);
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.settings-input::placeholder {
+  color: var(--text-3);
+}
+select.settings-input {
+  cursor: pointer;
+}
+.settings-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--text-3);
+}
+.settings-input:focus-visible {
+  outline: none;
+  border-color: var(--blue-dark);
+  background: var(--card);
+  box-shadow: 0 0 0 3px var(--blue-tint);
+}
+/*
+ * For the one compound field (Workspace URL's "orbit.io/" + <input>
+ * wrapper) where `.settings-input` sits on a non-focusable <div> and
+ * the real <input> is a plain-styled child — :focus-visible can't
+ * match the div itself (it's never the focused element), so the
+ * container glow is driven by :focus-within instead. The child input
+ * still carries its own `.focus-ring` for a direct keyboard outline.
+ */
+.settings-input:focus-within {
+  border-color: var(--blue-dark);
+  background: var(--card);
+  box-shadow: 0 0 0 3px var(--blue-tint);
+}
+.settings-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-btn {
+  transition: opacity 140ms ease, background 140ms ease, border-color 140ms ease, color 140ms ease, transform 100ms ease;
+}
+.settings-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.settings-btn-primary:hover:not(:disabled) {
+  opacity: 0.86;
+}
+.settings-btn-secondary {
+  background: transparent;
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.settings-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.settings-btn-ghost-danger {
+  background: transparent;
+  color: #b3564b;
+}
+.settings-btn-ghost-danger:hover:not(:disabled) {
+  background: #fbf2f1;
+}
+
+.settings-option-card {
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.settings-option-card:hover {
+  box-shadow: inset 0 0 0 1px var(--text-3);
+}
+
+.settings-swatch {
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+.settings-swatch:hover {
+  transform: scale(1.08);
 }

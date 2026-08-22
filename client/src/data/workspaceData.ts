@@ -240,11 +240,32 @@ export const DISCUSSION_TYPE_LABEL: Record<Discussion["type"], string> = {
 // is what made these fully dead — confirmed via a zero-results grep
 // before removal.
 
+/** The task's own creation timestamp — straight from Task.createdAt (see TaskContext.mapTaskRecordToTask). Null on tasks built by an optimistic create that hasn't been refetched yet, same caveat as getProjectCreatedAt. */
+export function getTaskCreatedAt(task: Task): number | null {
+  return typeof task.createdAt === "number" ? task.createdAt : null;
+}
+
 export function getTaskCompletedAt(task: Task): number | null {
+  // Prefer the session-local activity log when present — it's the more
+  // precise signal (timestamped at the moment the status actually
+  // flipped, during this session).
   const entry = [...(task.activity ?? [])].reverse().find((e) => e.text === "Status changed to Completed");
-  if (!entry) return null;
-  const ts = idTimestamp(entry.id, 0);
-  return ts > 0 ? ts : null;
+  if (entry) {
+    const ts = idTimestamp(entry.id, 0);
+    if (ts > 0) return ts;
+  }
+
+  // Fall back to Task.updatedAt for tasks loaded straight from the API —
+  // TaskContext seeds `activity` empty (real per-status history isn't
+  // fetched), so a task that was already Completed before this page load
+  // would otherwise never show up here at all. The backend has no
+  // dedicated completedAt column, so "last modified, while Completed" is
+  // the closest true signal available rather than a fabricated one.
+  if (task.status === "Completed" && typeof task.updatedAt === "number") {
+    return task.updatedAt;
+  }
+
+  return null;
 }
 
 function inferTaskEventType(text: string): ActivityFeedItem["type"] {

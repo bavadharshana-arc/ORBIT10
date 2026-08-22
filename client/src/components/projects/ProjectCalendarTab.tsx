@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CalendarDays } from "lucide-react";
 import { MiniCalendar } from "../dashboard/MiniCalendar";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
@@ -57,7 +58,15 @@ export function ProjectCalendarTab() {
   const grid = useMemo(() => buildMonthGrid(viewedMonth), [viewedMonth]);
   const isViewingCurrentMonth = grid.year === today.getFullYear() && grid.month === today.getMonth();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
+  const [searchParams] = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => searchParams.get("task"));
 
   function handlePrevMonth() {
     setViewedMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
@@ -137,6 +146,7 @@ export function ProjectCalendarTab() {
 
     notifyTaskAssigned(addNotification, {
       taskTitle: selectedTask.title,
+      taskId: selectedTask.id,
       projectName: selectedTask.project,
       assigneeId: values.assigneeKeys[0],
       actorId: user?.id,
@@ -147,6 +157,7 @@ export function ProjectCalendarTab() {
     if (changes.justCompleted) {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
+        taskId: selectedTask.id,
         projectName: selectedTask.project,
         assigneeId: values.assigneeKeys[0],
         actorId: user?.id,

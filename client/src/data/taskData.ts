@@ -60,6 +60,10 @@ export interface Task {
   assigneeId?: string;
   comments: TaskComment[];
   activity: TaskActivityEntry[];
+  /** Epoch ms, straight from the backend's Task.createdAt column (TaskContext.mapTaskRecordToTask). Powers the dashboard's "tasks created vs completed" chart. Undefined on tasks built locally by an optimistic create (Kanban/Tasks/ProjectWorkspace "New Task") until the next refetch pulls the real row — same absent-until-refetch caveat as Project.createdAt. */
+  createdAt?: number;
+  /** Epoch ms, straight from the backend's Task.updatedAt column — refreshed on every successful save (TaskContext.updateTask). Used as the best-effort "completed on" signal when the task's current status is Completed, since the backend doesn't track a dedicated completedAt (see getTaskCompletedAt in workspaceData.ts). Same absent-until-refetch caveat as `createdAt`. */
+  updatedAt?: number;
 }
 
 
@@ -165,6 +169,32 @@ export function getDueGroup(
 }
 
 
+
+/**
+ * "Aug 16"-style short label for a task's due date, falling back to
+ * `fallback` (e.g. Task.due, or a static "No due date") when there's no
+ * parseable dueDate. Pulled out as a shared pure helper — Tasks.tsx's
+ * TaskRow and the Tasks page's UpcomingDeadlinesCard both need the exact
+ * same formatting, and previously only the former had it (private,
+ * unexported).
+ */
+export function formatDueLabel(
+  dueDate: string | undefined,
+  fallback: string
+): string {
+  if (dueDate) {
+    const date = new Date(`${dueDate}T00:00:00`);
+
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    }
+  }
+
+  return fallback;
+}
 
 export function getUpcomingTasks(
   tasks: Task[],

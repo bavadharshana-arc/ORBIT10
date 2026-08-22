@@ -125,7 +125,7 @@ export function MiniCalendar({
                   fontSize: 12.5,
                   fontWeight: isToday || isSelected ? 700 : 500,
                   color: isOutside ? "var(--text-3)" : isToday ? "var(--surface)" : "var(--text)",
-                  background: isToday ? "var(--text)" : isHovered ? "var(--surface-2)" : "transparent",
+                  background: isToday ? "var(--blue-dark)" : isHovered ? "var(--surface-2)" : "transparent",
                   boxShadow: isSelected ? "inset 0 0 0 1.5px var(--blue-dark)" : "none",
                   opacity: isOutside ? 0.5 : 1,
                   position: "relative",

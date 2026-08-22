@@ -20,7 +20,28 @@ import { AvatarStack } from "../ui/AvatarStack";
    CONSTANTS
 ============================================================ */
 
-export const LABEL_WIDTH = 360;
+// Widened from 360 — real task titles ("Set up Lighthouse performance
+// budget in CI") were running right up against the edge of the sticky
+// label column, leaving no room to spare before wrapping/crowding the
+// priority+status pills below. Still a fixed pixel width (not a
+// hardcoded huge one) because the day-track's own bar/milestone math is
+// independent of it — bumping this number only widens the label column,
+// nothing downstream needs to change.
+export const LABEL_WIDTH = 400;
+
+// The real Task model (server/prisma/schema.prisma) has no `startDate`
+// column at all — only `dueDate` — so `TaskGanttRow` below always falls
+// back to a same-day bar for every real task (see its own comment). At a
+// single day's actual column width (dayWidth-10 -> as little as 16px in
+// month view, 34px in week view) that fallback bar reads as a tiny,
+// near-invisible tick rather than a real bar, which is what made the
+// whole grid look sparse/empty. This is a floor on rendered *width* only
+// — it never changes `barLeft` (still exactly the due/start date's own
+// column) or invents a multi-day span, so date alignment stays exact;
+// it just makes a real bar big enough to actually read as one, with room
+// for its status icon and a few characters of title.
+export const MIN_BAR_WIDTH = 92;
+
 export const RANGE_PADDING_DAYS = 3;
 export const MAX_RANGE_DAYS = 180;
 
@@ -226,6 +247,7 @@ export function GanttRow({
   return (
     <div
       onClick={onClick}
+      className={onClick ? "nav-item" : undefined}
       style={{
         display: "flex",
         width: totalWidth,
@@ -241,6 +263,13 @@ export function GanttRow({
           width: LABEL_WIDTH,
           flexShrink: 0,
           background: labelBackground,
+          // A safety net shared by every label renderer (date header,
+          // project group header, task row) — the label column always
+          // has a "reasonable minimum width" (LABEL_WIDTH above), but
+          // this guarantees nothing inside it can ever visually bleed
+          // past that width into the day-track/timeline area, whatever
+          // its content ends up being.
+          overflow: "hidden",
         }}
       >
         {label}
@@ -332,6 +361,7 @@ export function TaskGanttRow({
   dayWidth,
   daysWidth,
   totalWidth,
+  isSelected = false,
   onSelect,
 }: {
   task: Task;
@@ -340,6 +370,8 @@ export function TaskGanttRow({
   dayWidth: number;
   daysWidth: number;
   totalWidth: number;
+  /** True when this is the task currently open in the task details drawer — gives the row a clear selected state instead of no feedback at all once you've clicked it. */
+  isSelected?: boolean;
   onSelect: () => void;
 }) {
   const dueDate = resolveTaskDueDate(task, today);
@@ -373,34 +405,49 @@ export function TaskGanttRow({
 
   const rangeStartDay = days[0];
   const barLeft = hasBar && startDate ? daysBetween(rangeStartDay, startDate) * dayWidth : 0;
-  const barWidth = hasBar && startDate && dueDate ? Math.max(dayWidth - 10, (daysBetween(startDate, dueDate) + 1) * dayWidth - 10) : 0;
+  const barWidth = hasBar && startDate && dueDate ? Math.max(MIN_BAR_WIDTH, (daysBetween(startDate, dueDate) + 1) * dayWidth - 10) : 0;
   const milestoneLeft = !hasBar && dueDate ? daysBetween(rangeStartDay, dueDate) * dayWidth : 0;
+  const isHighPriority = task.priority === "High";
 
   return (
     <GanttRow
       totalWidth={totalWidth}
       daysWidth={daysWidth}
-      labelBackground="#FFFFFF"
+      labelBackground={isSelected ? "#EEF2F6" : "#FFFFFF"}
       borderBottom="1px solid #EEF2F6"
       onClick={onSelect}
       label={
-        <div style={{ padding: "6px 4px" }}>
+        <div
+          style={{
+            padding: "9px 4px 9px 9px",
+            // Reserves the same 3px regardless of state so selecting a
+            // row never shifts its content — same technique TaskRow.tsx
+            // already uses for its own priority-accent border.
+            borderLeft: isSelected ? "3px solid var(--blue-dark)" : "3px solid transparent",
+          }}
+        >
           <div
             style={{
               fontSize: 12.5,
               fontWeight: 650,
               color: "#20242B",
-              whiteSpace: "normal",
-              overflowWrap: "break-word",
+              // The wider LABEL_WIDTH above already gives most real
+              // titles room to sit on one line; anything still too long
+              // now ellipses cleanly (the `title` attribute keeps the
+              // full text on hover) instead of wrapping and stretching
+              // the row's height unpredictably per task.
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
               lineHeight: 1.3,
-              marginBottom: 3,
+              marginBottom: 4,
             }}
             title={task.title}
           >
             {task.title}
           </div>
 
-          <div className="flex items-center flex-wrap" style={{ gap: 4, marginBottom: 4 }}>
+          <div className="flex items-center flex-wrap" style={{ gap: 4, marginBottom: 5 }}>
             <Pill tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>
             <Pill tone="surface">{task.status}</Pill>
           </div>
@@ -427,7 +474,7 @@ export function TaskGanttRow({
                 width: dayWidth,
                 flexShrink: 0,
                 height: "100%",
-                background: isToday ? "rgba(142,167,191,0.08)" : "transparent",
+                background: isSelected ? "#EEF2F6" : isToday ? "rgba(142,167,191,0.08)" : "transparent",
               }}
             />
           );
@@ -444,31 +491,38 @@ export function TaskGanttRow({
               top: "50%",
               transform: "translateY(-50%)",
               width: barWidth,
-              height: 22,
-              borderRadius: 6,
+              height: 24,
+              borderRadius: 7,
               background: STATUS_BAR_COLOR[task.status],
+              // A subtle "was this High priority" edge — an inset shadow
+              // rather than a border/outline so it never changes the
+              // bar's actual rendered width (which has to stay exactly
+              // `barWidth` for date alignment to stay honest), and a
+              // translucent dark tone so it still reads against every
+              // status color, including the darkest (Completed).
+              boxShadow: isHighPriority ? "inset 3px 0 0 0 rgba(32,36,43,0.35)" : undefined,
+              outline: isSelected ? "2px solid var(--blue-dark)" : "none",
+              outlineOffset: 1,
               gap: 4,
-              paddingLeft: 6,
+              paddingLeft: isHighPriority ? 9 : 6,
               paddingRight: 6,
               overflow: "hidden",
               cursor: "pointer",
             }}
           >
             <StatusIcon size={12} color={task.status === "Completed" ? "#F7F8FA" : "#20242B"} style={{ flexShrink: 0 }} />
-            {barWidth > 60 && (
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  color: task.status === "Completed" ? "#F7F8FA" : "#20242B",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {task.title}
-              </span>
-            )}
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: task.status === "Completed" ? "#F7F8FA" : "#20242B",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {task.title}
+            </span>
           </div>
         )}
 

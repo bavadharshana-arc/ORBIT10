@@ -8,6 +8,7 @@ import { ApiError } from "../../lib/api";
 import { useWorkspaceRole, isWorkspaceOwner } from "../../hooks/useWorkspaceRole";
 import { ConfirmDangerModal } from "./ConfirmDangerModal";
 import { SectionCard } from "./shared";
+import { settingsDangerGhostButtonStyle } from "./styles";
 
 /* ============================================================
    DANGER ZONE (Phase 19 Frontend Integration audit fix, Priority 3)
@@ -29,6 +30,12 @@ import { SectionCard } from "./shared";
      every other member's real data, not just the caller's own) rather
      than a contained fix. Removed rather than left pointing at nothing,
      per the audit's own guidance.
+
+   Uses SectionCard (tone="danger") rather than the SettingsSection/
+   SettingsGroup/SettingsRow vocabulary the rest of Settings switched
+   to — intentionally: this is the one section meant to keep reading as
+   a visually distinct, contained block instead of blending into the
+   page like everything else.
 ============================================================ */
 
 export function DangerZoneSection() {
@@ -65,14 +72,11 @@ export function DangerZoneSection() {
 
   return (
     <SectionCard icon={TriangleAlert} title="Danger Zone" description="These actions are irreversible. Proceed with care." tone="danger">
-      <div className="flex flex-col" style={{ gap: 12 }}>
-        <div
-          className="flex items-center justify-between flex-wrap"
-          style={{ gap: 14, padding: "14px 16px", borderRadius: 12, background: "#FFFFFF", border: "1px solid #E4E8ED", opacity: 0.7 }}
-        >
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between flex-wrap" style={{ gap: 14, padding: "12px 0", opacity: 0.7 }}>
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 650, color: "#20242B" }}>Reset workspace data</p>
-            <p style={{ margin: "3px 0 0", fontSize: 11, color: "#98A2B3" }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 650, color: "var(--text)" }}>Reset workspace data</p>
+            <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-3)", maxWidth: 440 }}>
               Not available — there's no safe way to reset this shared workspace's real data for every member from
               here. Ask an administrator to remove specific projects or tasks instead.
             </p>
@@ -81,13 +85,9 @@ export function DangerZoneSection() {
           <span
             className="flex items-center"
             style={{
-              gap: 7,
-              border: "1px solid #E4E8ED",
-              background: "#F7F8FA",
-              color: "#98A2B3",
-              borderRadius: 11,
-              padding: "9px 14px",
-              fontSize: 12.5,
+              gap: 6,
+              color: "var(--text-3)",
+              fontSize: 11.5,
               fontWeight: 600,
               flexShrink: 0,
             }}
@@ -99,38 +99,28 @@ export function DangerZoneSection() {
 
         <div
           className="flex items-center justify-between flex-wrap"
-          style={{ gap: 14, padding: "14px 16px", borderRadius: 12, background: "#FFFFFF", border: "1px solid #E9CCC6" }}
+          style={{ gap: 14, padding: "12px 0", borderTop: "1px solid #E9CCC6" }}
         >
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 650, color: "#20242B" }}>Delete account</p>
-            <p style={{ margin: "3px 0 0", fontSize: 11, color: "#98A2B3" }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 650, color: "var(--text)" }}>Delete account</p>
+            <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-3)", maxWidth: 440 }}>
               Permanently deletes your account ({user?.email}). This cannot be undone.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => setIsDeleteOpen(true)}
-            className="flex items-center"
-            style={{
-              gap: 7,
-              border: "none",
-              background: "#B3564B",
-              color: "#FFF8F6",
-              borderRadius: 11,
-              padding: "9px 14px",
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              flexShrink: 0,
+            onClick={() => {
+              setDeleteError(null);
+              setIsDeleteOpen(true);
             }}
+            className="focus-ring settings-btn settings-btn-ghost-danger flex items-center"
+            style={{ gap: 6, ...settingsDangerGhostButtonStyle }}
           >
             <Trash2 size={13} />
             Delete account
           </button>
         </div>
-
-        {deleteError && <p style={{ margin: 0, fontSize: 12, color: "#B3564B" }}>{deleteError}</p>}
       </div>
 
       <ConfirmDangerModal
@@ -139,6 +129,8 @@ export function DangerZoneSection() {
         description="This permanently deletes your account and removes you from every workspace you belong to. This cannot be undone."
         confirmWord="DELETE"
         confirmLabel={deleting ? "Deleting…" : "Delete account"}
+        pending={deleting}
+        error={deleteError}
         onCancel={() => setIsDeleteOpen(false)}
         onConfirm={handleDeleteConfirm}
       />

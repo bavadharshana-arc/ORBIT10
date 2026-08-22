@@ -83,12 +83,12 @@ export default function Settings() {
           HEADER
       ====================================================== */}
 
-      <div style={{ marginBottom: 18 }}>
-        <h1 className="font-display" style={{ fontSize: 28, fontWeight: 560, marginBottom: 6, color: "#20242B" }}>
+      <div style={{ marginBottom: 30 }}>
+        <h1 className="font-display" style={{ fontSize: 27, fontWeight: 560, marginBottom: 6, color: "var(--text)" }}>
           Settings
         </h1>
 
-        <p style={{ fontSize: 13.5, color: "#667085", margin: 0 }}>
+        <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>
           Manage your profile, workspace, and account preferences.
         </p>
       </div>
@@ -97,11 +97,11 @@ export default function Settings() {
           MAIN LAYOUT
       ====================================================== */}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)]" style={{ gap: 18, alignItems: "start" }}>
+      <div className="grid grid-cols-1 xl:grid-cols-[208px_minmax(0,1fr)]" style={{ gap: 28, alignItems: "start" }}>
         {/* TABS */}
         <div
-          className="bg-card border-soft flex xl:flex-col"
-          style={{ borderRadius: 16, padding: 10, gap: 2, position: "sticky", top: 20, overflowX: "auto" }}
+          className="flex xl:flex-col"
+          style={{ gap: 2, position: "sticky", top: 20, overflowX: "auto" }}
         >
           {visibleSections.map((section) => {
             const active = activeSection === section.key;
@@ -112,24 +112,24 @@ export default function Settings() {
                 key={section.key}
                 type="button"
                 onClick={() => setActiveSection(section.key)}
-                className="nav-item flex items-center"
+                aria-current={active ? "page" : undefined}
+                className="nav-item focus-ring flex items-center"
                 style={{
-                  gap: 10,
-                  padding: "10px 12px",
-                  borderRadius: 12,
+                  gap: 9,
+                  padding: "8px 10px",
+                  borderRadius: 8,
                   border: "none",
                   cursor: "pointer",
                   textAlign: "left",
-                  fontSize: 13,
+                  fontSize: 12.5,
                   whiteSpace: "nowrap",
                   flexShrink: 0,
-                  background: active ? "#FFFFFF" : "transparent",
-                  boxShadow: active ? "0 1px 2px rgba(32,36,43,0.04), 0 8px 20px -10px rgba(32,36,43,0.16)" : "none",
-                  color: danger && !active ? "#B3564B" : active ? "#20242B" : "#667085",
+                  background: active ? "var(--surface-2)" : "transparent",
+                  color: danger && !active ? "#B3564B" : active ? "var(--text)" : "var(--text-3)",
                   fontWeight: active ? 600 : 500,
                 }}
               >
-                <section.icon size={16} strokeWidth={1.8} />
+                <section.icon size={14} strokeWidth={1.8} />
                 {section.label}
               </button>
             );
@@ -137,7 +137,7 @@ export default function Settings() {
         </div>
 
         {/* CONTENT */}
-        <div className="flex flex-col" style={{ gap: 18, minWidth: 0 }}>
+        <div className="flex flex-col" style={{ gap: 40, minWidth: 0 }}>
           {activeSection === "profile" && <ProfileSection />}
 
           {activeSection === "workspace" && <WorkspaceSection />}
@@ -155,7 +155,7 @@ export default function Settings() {
           )}
 
           {activeSection === "security" && (
-            <SecuritySection security={settings.security} accent={accentHex} onChange={handleSecurityChange} />
+            <SecuritySection security={settings.security} onChange={handleSecurityChange} />
           )}
 
           {activeSection === "danger" && <DangerZoneSection />}

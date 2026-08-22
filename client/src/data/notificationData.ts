@@ -46,36 +46,46 @@ export type NewNotification = Omit<Notification, "id" | "createdAt" | "read"> & 
 export { formatRelativeTime as formatNotificationTime };
 
 
-export type NotificationGroupLabel = "Today" | "Yesterday" | "Earlier";
+/** Drives the Notification Center's tab row (NotificationPanel) — Today / This Week / Earlier, in that order. */
+export type NotificationGroupLabel = "Today" | "This Week" | "Earlier";
 
 export interface NotificationGroup {
   label: NotificationGroupLabel;
   items: Notification[];
 }
 
-const GROUP_LABELS: NotificationGroupLabel[] = ["Today", "Yesterday", "Earlier"];
+const GROUP_LABELS: NotificationGroupLabel[] = ["Today", "This Week", "Earlier"];
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isSameDay(ms: number, reference: Date): boolean {
   return new Date(ms).toDateString() === reference.toDateString();
 }
 
-
+/**
+ * Buckets by real `createdAt` only — never a fabricated timestamp just to
+ * populate a category. Unlike the old Today/Yesterday/Earlier grouping
+ * (which skipped empty buckets, fine for a flat stacked list), every one
+ * of the 3 labels is always returned, even with an empty `items` array —
+ * NotificationPanel's tab row needs the full set to render "This Week"/
+ * "Earlier" as clickable tabs regardless of whether they currently hold
+ * anything; it decides what an empty tab looks like, not this function.
+ */
 export function groupNotificationsByRecency(notifications: Notification[]): NotificationGroup[] {
   const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
+  const weekAgo = today.getTime() - WEEK_MS;
 
   const buckets: Record<NotificationGroupLabel, Notification[]> = {
     Today: [],
-    Yesterday: [],
+    "This Week": [],
     Earlier: [],
   };
 
   notifications.forEach((notification) => {
     if (isSameDay(notification.createdAt, today)) buckets.Today.push(notification);
-    else if (isSameDay(notification.createdAt, yesterday)) buckets.Yesterday.push(notification);
+    else if (notification.createdAt >= weekAgo) buckets["This Week"].push(notification);
     else buckets.Earlier.push(notification);
   });
 
-  return GROUP_LABELS.map((label) => ({ label, items: buckets[label] })).filter((group) => group.items.length > 0);
+  return GROUP_LABELS.map((label) => ({ label, items: buckets[label] }));
 }

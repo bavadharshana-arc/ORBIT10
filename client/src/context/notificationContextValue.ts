@@ -12,6 +12,8 @@ export interface NotificationContextValue {
   addNotification: (input: NewNotification) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
+  /** Deletes a single notification — the per-row trash action, distinct from clearAll (which deletes every notification). */
+  deleteNotification: (id: string) => void;
   clearAll: () => void;
 }
 

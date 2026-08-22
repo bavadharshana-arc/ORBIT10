@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Building2 } from "lucide-react";
 
 import { formatDatePreview, slugify, TIMEZONES, type DateFormat, type WeekStart } from "../../data/settingsData";
 import { useWorkspace } from "../../context/workspaceContextValue";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { ApiError } from "../../lib/api";
 import { updateWorkspaceSettings, type WorkspaceRecord } from "../../lib/workspaceApi";
-import { Field, SavedBadge, SectionCard } from "./shared";
-import { inputStyle, primaryButtonStyle, secondaryButtonStyle, selectStyle } from "./styles";
+import { SavedBadge, SettingsGroup, SettingsGroupHeader, SettingsRow, SettingsSection } from "./shared";
+import { inputStyle, selectStyle, settingsPrimaryButtonStyle, settingsSecondaryButtonStyle } from "./styles";
 import { useSavedFlash } from "./useSavedFlash";
 
 const DATE_FORMATS: DateFormat[] = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
@@ -84,19 +83,19 @@ export function WorkspaceSection() {
 
   if (loading) {
     return (
-      <SectionCard icon={Building2} title="Workspace" description="Preferences shared across everyone in Orbit.">
-        <p style={{ margin: 0, fontSize: 12.5, color: "#98A2B3" }}>Loading workspace settings…</p>
-      </SectionCard>
+      <SettingsSection title="Workspace" description="Preferences shared across everyone in Orbit.">
+        <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-3)" }}>Loading workspace settings…</p>
+      </SettingsSection>
     );
   }
 
   if (loadError || !workspace || !form) {
     return (
-      <SectionCard icon={Building2} title="Workspace" description="Preferences shared across everyone in Orbit.">
+      <SettingsSection title="Workspace" description="Preferences shared across everyone in Orbit.">
         <p style={{ margin: 0, fontSize: 12.5, color: "#B3564B" }}>
           {loadError ?? "No workspace found for your account."}
         </p>
-      </SectionCard>
+      </SettingsSection>
     );
   }
 
@@ -161,38 +160,51 @@ export function WorkspaceSection() {
   }
 
   return (
-    <SectionCard icon={Building2} title="Workspace" description="Preferences shared across everyone in Orbit.">
-      <div className="flex flex-col" style={{ gap: 16 }}>
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
-          <Field label="Workspace name">
+    <SettingsSection title="Workspace" description="Preferences shared across everyone in Orbit.">
+      {!canManage && (
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--text-3)" }}>
+          Only workspace owners and admins can edit these settings — you can view them, but Save is hidden.
+        </p>
+      )}
+
+      <div className="flex flex-col" style={{ gap: 8 }}>
+        <SettingsGroupHeader label="Workspace identity" />
+        <SettingsGroup>
+          <SettingsRow label="Workspace name" description="Shown throughout Orbit and in notifications.">
             <input
               value={form.name}
               onChange={(event) => set("name", event.target.value)}
               disabled={!canManage}
+              className="focus-ring settings-input"
               style={inputStyle}
             />
-          </Field>
+          </SettingsRow>
 
-          <Field label="Workspace URL" hint="Lowercase letters, numbers, and dashes only.">
-            <div className="flex items-center" style={{ ...inputStyle, gap: 4, padding: "9px 12px" }}>
-              <span style={{ color: "#98A2B3" }}>orbit.io/</span>
+          <SettingsRow label="Workspace URL" description="Lowercase letters, numbers, and dashes only.">
+            <div className="flex items-center focus-ring settings-input" style={{ ...inputStyle, gap: 3, padding: "8px 12px" }}>
+              <span style={{ color: "var(--text-3)", flexShrink: 0 }}>orbit.io/</span>
               <input
                 value={form.slug}
                 onChange={(event) => set("slug", event.target.value)}
                 onBlur={() => set("slug", slugify(form.slug))}
                 disabled={!canManage}
-                style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
+                className="focus-ring"
+                style={{ border: "none", background: "transparent", fontSize: 12.5, flex: 1, minWidth: 0, color: "var(--text)", padding: 0 }}
               />
             </div>
-          </Field>
-        </div>
+          </SettingsRow>
+        </SettingsGroup>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
-          <Field label="Time zone">
+      <div className="flex flex-col" style={{ gap: 8 }}>
+        <SettingsGroupHeader label="Regional preferences" />
+        <SettingsGroup>
+          <SettingsRow label="Time zone">
             <select
               value={form.timezone}
               onChange={(event) => set("timezone", event.target.value)}
               disabled={!canManage}
+              className="focus-ring settings-input"
               style={selectStyle}
             >
               {TIMEZONES.map((zone) => (
@@ -201,13 +213,14 @@ export function WorkspaceSection() {
                 </option>
               ))}
             </select>
-          </Field>
+          </SettingsRow>
 
-          <Field label="Date format" hint={`Preview: ${formatDatePreview(new Date(), form.dateFormat)}`}>
+          <SettingsRow label="Date format" description={`Preview: ${formatDatePreview(new Date(), form.dateFormat)}`}>
             <select
               value={form.dateFormat}
               onChange={(event) => set("dateFormat", event.target.value as DateFormat)}
               disabled={!canManage}
+              className="focus-ring settings-input"
               style={selectStyle}
             >
               {DATE_FORMATS.map((format) => (
@@ -216,56 +229,73 @@ export function WorkspaceSection() {
                 </option>
               ))}
             </select>
-          </Field>
-        </div>
+          </SettingsRow>
 
-        <Field label="Week starts on">
-          <div className="flex items-center" style={{ gap: 2, background: "#EEF2F6", borderRadius: 10, padding: 3, width: "fit-content" }}>
-            {WEEK_STARTS.map((option) => {
-              const active = form.weekStart === option.key;
+          <SettingsRow label="Week starts on">
+            <div
+              className="flex items-center"
+              style={{ gap: 2, background: "var(--surface-2)", borderRadius: 8, padding: 3, width: "fit-content", marginLeft: "auto" }}
+            >
+              {WEEK_STARTS.map((option) => {
+                const active = form.weekStart === option.key;
 
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => set("weekStart", option.key)}
-                  disabled={!canManage}
-                  style={{
-                    border: "none",
-                    borderRadius: 7,
-                    padding: "7px 14px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: canManage ? "pointer" : "default",
-                    background: active ? "#FFFFFF" : "transparent",
-                    color: active ? "#20242B" : "#98A2B3",
-                    boxShadow: active ? "0 1px 2px rgba(32,36,43,0.08)" : "none",
-                  }}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => set("weekStart", option.key)}
+                    disabled={!canManage}
+                    aria-pressed={active}
+                    className="focus-ring"
+                    style={{
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 12px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: canManage ? "pointer" : "default",
+                      background: active ? "var(--card)" : "transparent",
+                      color: active ? "var(--text)" : "var(--text-3)",
+                      boxShadow: active ? "0 1px 2px rgba(32,36,43,0.08)" : "none",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
       </div>
 
-      {saveError && <p style={{ margin: "14px 0 0", fontSize: 11.5, color: "#B3564B" }}>{saveError}</p>}
+      {saveError && <p style={{ margin: 0, fontSize: 11.5, color: "#B3564B" }}>{saveError}</p>}
 
       {canManage && (
-        <div className="flex items-center" style={{ gap: 10, marginTop: 20 }}>
+        <div className="flex items-center" style={{ gap: 10 }}>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving || !isDirty}
-            className="lift"
-            style={{ ...primaryButtonStyle, opacity: saving || !isDirty ? 0.6 : 1, cursor: saving || !isDirty ? "default" : "pointer" }}
+            className="settings-btn settings-btn-primary focus-ring"
+            style={{
+              ...settingsPrimaryButtonStyle,
+              cursor: saving || !isDirty ? "default" : "pointer",
+              // See ProfileSection.tsx's identical comment: opacity must
+              // stay unset at rest, or it permanently overrides the CSS
+              // hover rule regardless of hover state.
+              ...(saving || !isDirty ? { opacity: 0.5 } : {}),
+            }}
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
 
           {isDirty && !saving && (
-            <button type="button" onClick={handleDiscard} style={secondaryButtonStyle}>
+            <button
+              type="button"
+              onClick={handleDiscard}
+              className="settings-btn settings-btn-secondary focus-ring"
+              style={settingsSecondaryButtonStyle}
+            >
               Discard
             </button>
           )}
@@ -273,6 +303,6 @@ export function WorkspaceSection() {
           <SavedBadge visible={saved} />
         </div>
       )}
-    </SectionCard>
+    </SettingsSection>
   );
 }

@@ -43,7 +43,9 @@ const RBAC_DEMO_USERS = [
 ] as const;
 
 type TaskSeed = { title: string; status: string; priority: string; assignee: string; due: string; body: string };
-type ProjectSeed = { name: string; description: string; tasks: TaskSeed[] };
+/** Mirrors projectFile.service.ts's FILE_KINDS ("document" | "image" | "pdf" | "spreadsheet" | "other") — kept a plain string here (not imported) since seed.ts already treats status/priority the same loosely-typed way above. */
+type FileSeed = { name: string; extension: string; kind: string; sizeBytes: number; uploader: string; date: string };
+type ProjectSeed = { name: string; description: string; tasks: TaskSeed[]; files: FileSeed[] };
 
 const PROJECTS: ProjectSeed[] = [
   {
@@ -59,6 +61,11 @@ const PROJECTS: ProjectSeed[] = [
       { title: "Write launch announcement copy", status: "To Do", priority: "Low", assignee: "Demo Product Manager", due: "2026-09-01", body: "Draft blog post and social copy for the relaunch." },
       { title: "Cross-browser QA pass", status: "Blocked", priority: "High", assignee: "Unassigned", due: "2026-09-05", body: "Blocked on homepage layout completion before QA can start." },
     ],
+    files: [
+      { name: "Project Brief", extension: "pdf", kind: "pdf", sizeBytes: 412_800, uploader: "Demo Product Manager", date: "2026-08-02" },
+      { name: "Homepage Wireframes", extension: "png", kind: "image", sizeBytes: 2_458_000, uploader: "Demo Designer", date: "2026-08-06" },
+      { name: "Design System", extension: "fig", kind: "other", sizeBytes: 3_150_000, uploader: "Demo Designer", date: "2026-08-09" },
+    ],
   },
   {
     name: "Demo Project: Mobile App Launch",
@@ -73,6 +80,11 @@ const PROJECTS: ProjectSeed[] = [
       { title: "Beta test with 20 external users", status: "To Do", priority: "High", assignee: "Demo Product Manager", due: "2026-08-30", body: "Recruit and onboard a closed beta cohort." },
       { title: "Fix crash on Android 14 cold start", status: "Blocked", priority: "Urgent", assignee: "Demo Developer", due: "2026-08-16", body: "Blocked pending crash logs from the beta cohort." },
     ],
+    files: [
+      { name: "Sprint Planning Notes", extension: "docx", kind: "document", sizeBytes: 86_200, uploader: "Demo Product Manager", date: "2026-08-11" },
+      { name: "Product Roadmap", extension: "xlsx", kind: "spreadsheet", sizeBytes: 54_400, uploader: "Demo Product Manager", date: "2026-08-05" },
+      { name: "QA Report", extension: "xlsx", kind: "spreadsheet", sizeBytes: 128_900, uploader: "Demo Developer", date: "2026-08-14" },
+    ],
   },
   {
     name: "Demo Project: Internal Tooling",
@@ -86,6 +98,10 @@ const PROJECTS: ProjectSeed[] = [
       { title: "Write runbook for on-call escalation", status: "To Do", priority: "Medium", assignee: "Demo Owner", due: "2026-09-02", body: "Document escalation steps for the on-call rotation." },
       { title: "Audit third-party API rate limits", status: "To Do", priority: "Medium", assignee: "Demo Developer", due: "2026-09-08", body: "Check current usage against provider rate limits." },
       { title: "Retire legacy CSV export script", status: "Backlog", priority: "Low", assignee: "Unassigned", due: "2026-09-15", body: "Replace the old export script with the new dashboard export." },
+    ],
+    files: [
+      { name: "API Documentation", extension: "md", kind: "document", sizeBytes: 34_100, uploader: "Demo Developer", date: "2026-08-08" },
+      { name: "Meeting Notes", extension: "docx", kind: "document", sizeBytes: 21_300, uploader: "Demo Owner", date: "2026-08-13" },
     ],
   },
 ];
@@ -159,6 +175,31 @@ async function getOrCreateTask(projectId: string, title: string, fields: TaskFie
   return prisma.task.create({ data: { title, projectId, ...fields } });
 }
 
+type FileFields = {
+  extension: string;
+  kind: string;
+  sizeBytes: number;
+  folder: string;
+  uploaderId: string | null;
+  createdAt: Date;
+};
+
+/**
+ * Files page follow-up: the demo workspace had projects and tasks but
+ * zero ProjectFile rows, so a fresh checkout's Files page was always
+ * empty regardless of what the UI did — this seeds through the same
+ * real ProjectFile model/API every real upload uses (no UI-only mock
+ * data), matched by projectId+name for the same idempotent
+ * lookup-then-create/update convention as getOrCreateProject/Task above.
+ */
+async function getOrCreateFile(projectId: string, name: string, fields: FileFields) {
+  const existing = await prisma.projectFile.findFirst({ where: { projectId, name } });
+  if (existing) {
+    return prisma.projectFile.update({ where: { id: existing.id }, data: fields });
+  }
+  return prisma.projectFile.create({ data: { name, projectId, ...fields } });
+}
+
 async function main() {
   console.log("Seeding demo workspace...");
 
@@ -204,6 +245,7 @@ async function main() {
   };
 
   let taskCount = 0;
+  let fileCount = 0;
   for (const projectSeed of PROJECTS) {
     const project = await getOrCreateProject(workspace.id, projectSeed.name, projectSeed.description);
 
@@ -222,11 +264,27 @@ async function main() {
       });
       taskCount += 1;
     }
+
+    for (const fileSeed of projectSeed.files) {
+      await getOrCreateFile(project.id, fileSeed.name, {
+        extension: fileSeed.extension,
+        kind: fileSeed.kind,
+        sizeBytes: fileSeed.sizeBytes,
+        folder: "General",
+        // "Unassigned" never appears in FileSeed.uploader today, but
+        // resolves the same safe way resolveAssigneeId does if it ever
+        // did — a null uploaderId (an anonymous upload) rather than a
+        // fabricated user.
+        uploaderId: usersByName[fileSeed.uploader]?.id ?? null,
+        createdAt: new Date(`${fileSeed.date}T00:00:00.000Z`),
+      });
+      fileCount += 1;
+    }
   }
 
   console.log(
     `Demo workspace seeded: workspace="${workspace.name}" (${workspace.id}), ` +
-      `users=${DEMO_USERS.length}, projects=${PROJECTS.length}, tasks=${taskCount}.`,
+      `users=${DEMO_USERS.length}, projects=${PROJECTS.length}, tasks=${taskCount}, files=${fileCount}.`,
   );
 
   // Phase 23 — RBAC demo accounts (see RBAC_DEMO_USERS above). Independent
