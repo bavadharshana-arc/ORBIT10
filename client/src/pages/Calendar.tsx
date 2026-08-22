@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 
 import { useTaskContext } from "../context/taskContextValue";
+import { useWorkspace } from "../context/workspaceContextValue";
+import { listWorkspaceMembers } from "../lib/workspaceApi";
+import { getInitials } from "../data/teamData";
 
 // ============================================================================
 // Types
@@ -116,27 +119,6 @@ function getMonthMatrix(year: number, month: number): Date[][] {
   }
   return weeks;
 }
-
-// ============================================================================
-// People sidebar data
-// ============================================================================
-// Phase [Calendar data-isolation fix]: this used to sit next to a
-// buildMockEvents() that fabricated 15 fake calendar events (dates relative
-// to "today" at load time) unconditionally shown to every account regardless
-// of workspace — not real data, not scoped, so a brand-new account saw the
-// exact same "Design review" / "API deadline" / etc. items as any other
-// account. Removed; the calendar grid now renders only real, workspace-scoped
-// task due dates from TaskContext (taskEvents below), matching how
-// Kanban/Timeline/Dashboard already source their data. PEOPLE stays as a
-// cosmetic filter-sidebar roster (not a source of grid events) — out of
-// scope for this fix.
-
-const PEOPLE: Person[] = [
-  { id: "p1", name: "Eddie Mutisya", email: "mutisya@orbit.com", initials: "EM" },
-  { id: "p2", name: "Alex Otieno", email: "alex@orbit.com", initials: "AO" },
-  { id: "p3", name: "Antony Kelvin", email: "antony@orbit.com", initials: "AK" },
-  { id: "p4", name: "Priya Nair", email: "priya@orbit.com", initials: "PN" },
-];
 
 // ============================================================================
 // Event visual treatment
@@ -762,6 +744,47 @@ export default function Calendar() {
   const today = useMemo(() => new Date(), []);
 
   const { tasks } = useTaskContext();
+  const { currentWorkspaceId } = useWorkspace();
+
+  // People sidebar — real, workspace-scoped members (same
+  // listWorkspaceMembers call Team.tsx already uses as its primary data
+  // source), replacing what used to be a hardcoded PEOPLE array shown to
+  // every account regardless of workspace. Re-fetches whenever the active
+  // workspace changes; a workspace with no other members just renders
+  // PeopleList's existing "No people found." empty state.
+  const [people, setPeople] = useState<Person[]>([]);
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      setPeople([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    listWorkspaceMembers(currentWorkspaceId)
+      .then((members) => {
+        if (cancelled) return;
+        setPeople(
+          members.map((member) => {
+            const name = member.user.name ?? member.user.email;
+            return {
+              id: member.user.id,
+              name,
+              email: member.user.email,
+              initials: getInitials(name),
+            };
+          }),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId]);
 
   // Tasks with a due date, mapped into the same CalendarEvent shape used
   // by the rest of the calendar so they render through the existing
@@ -879,7 +902,7 @@ export default function Calendar() {
         />
         <SelectedDayPanel date={selectedDate} events={selectedDayEvents} />
         <PeopleList
-          people={PEOPLE}
+          people={people}
           searchQuery={peopleSearchQuery}
           selectedPersonId={selectedPersonId}
           onSearchChange={setPeopleSearchQuery}
