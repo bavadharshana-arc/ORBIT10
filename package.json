@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "concurrently -n db,server,client -c magenta,blue,green \"npm run db --prefix server\" \"npm run dev --prefix server\" \"npm run dev --prefix client\""
+    "dev": "concurrently -n db,server,client -c magenta,blue,green --restart-tries 5 --restart-after 1000 \"npm --prefix server run db\" \"npm --prefix server run dev\" \"npm --prefix client run dev\""
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
