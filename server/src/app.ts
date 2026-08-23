@@ -34,7 +34,12 @@ export function createApp() {
   // are involved anywhere (auth is a Bearer JWT the client attaches
   // itself), so an open CORS policy doesn't expose credentials; it only
   // lets the browser read responses it could already get via curl.
-  app.use(cors());
+  //
+  // ORBIT Step 5 (Authentication Rate Limiting follow-up — CORS):
+  // restricted to the one real frontend origin anyway, via the same
+  // FRONTEND_URL env var auth.controller.ts already uses to build the
+  // password-reset link (server/README.md).
+  app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173" }));
   app.use(express.json());
 
   app.get("/api/health", (_req, res) => {
