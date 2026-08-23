@@ -753,12 +753,21 @@ export default function Calendar() {
   // workspace changes; a workspace with no other members just renders
   // PeopleList's existing "No people found." empty state.
   const [people, setPeople] = useState<Person[]>([]);
+  // Tracks the workspace id `people` was last computed for, so switching to
+  // "no active workspace" clears it once, during render (React's
+  // documented pattern for "adjust state when a prop changes" — mirrors
+  // WorkspaceSection.tsx's syncedWorkspaceId use of the same pattern)
+  // rather than via a synchronous setState in the effect body below, which
+  // is exactly what react-hooks/set-state-in-effect flags.
+  const [peopleWorkspaceId, setPeopleWorkspaceId] = useState(currentWorkspaceId);
+
+  if (currentWorkspaceId !== peopleWorkspaceId) {
+    setPeopleWorkspaceId(currentWorkspaceId);
+    if (!currentWorkspaceId) setPeople([]);
+  }
 
   useEffect(() => {
-    if (!currentWorkspaceId) {
-      setPeople([]);
-      return;
-    }
+    if (!currentWorkspaceId) return;
 
     let cancelled = false;
 
