@@ -5,18 +5,36 @@ import { startTestServer, fetchJson } from "./testServer";
 import { uniqueEmail, cleanupTestUsers } from "./testHelpers";
 import { prisma } from "../lib/prisma";
 import { hashResetToken } from "../utils/token";
+import { resetEmailProviderCache } from "../services/email.service";
 
 describe("password reset", () => {
   let baseUrl: string;
   let close: () => Promise<void>;
+  let originalEmailSmtpHost: string | undefined;
 
   before(async () => {
+    // .env's real EMAIL_SMTP_HOST leaks into this process via lib/prisma.ts's
+    // `import "dotenv/config"`, which makes email.service.ts think a real
+    // provider is configured and suppresses the dev-only devResetToken these
+    // tests rely on. Clear it and reset the cached provider so tests get the
+    // console/dev fallback described in the test names below.
+    originalEmailSmtpHost = process.env.EMAIL_SMTP_HOST;
+    delete process.env.EMAIL_SMTP_HOST;
+    resetEmailProviderCache();
+
     ({ baseUrl, close } = await startTestServer());
   });
 
   after(async () => {
     await close();
     await cleanupTestUsers();
+
+    if (originalEmailSmtpHost === undefined) {
+      delete process.env.EMAIL_SMTP_HOST;
+    } else {
+      process.env.EMAIL_SMTP_HOST = originalEmailSmtpHost;
+    }
+    resetEmailProviderCache();
   });
 
   async function registerUser(label: string) {
