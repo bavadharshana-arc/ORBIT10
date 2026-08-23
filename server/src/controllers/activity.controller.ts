@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as activityService from "../services/activity.service";
 import * as projectService from "../services/project.service";
 import * as workspaceService from "../services/workspace.service";
+import { logError } from "../lib/logger";
 
 export const createActivityEvent = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -43,6 +44,7 @@ export const createActivityEvent = async (req: Request, res: Response) => {
     const event = await activityService.createActivityEvent(projectId, type, text.trim(), actorId);
     return res.status(201).json(event);
   } catch (error) {
+    logError("activity.createActivityEvent", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -60,6 +62,7 @@ export const listActivity = async (req: Request, res: Response) => {
     const events = await activityService.listActivityForProject(projectId);
     return res.status(200).json(events);
   } catch (error) {
+    logError("activity.listActivity", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -16,6 +16,7 @@ import workspaceActivityRoutes from "./routes/workspaceActivity.routes";
 import projectFileRoutes from "./routes/projectFile.routes";
 import discussionAttachmentRoutes from "./routes/discussionAttachment.routes";
 import notificationRoutes from "./routes/notification.routes";
+import { errorHandler, notFoundHandler } from "./middleware/error.middleware";
 
 /**
  * The configured Express app, with every route/middleware wired up but
@@ -68,6 +69,16 @@ export function createApp() {
     discussionAttachmentRoutes,
   );
   app.use("/api/users/me/notifications", notificationRoutes);
+
+  // ORBIT Step 9 (Error Handling + Logging): must be registered last —
+  // notFoundHandler only ever runs when nothing above matched the
+  // request, and errorHandler only ever runs for something no route's
+  // own try/catch already handled (e.g. express.json()'s body-parser
+  // rejecting malformed JSON), replacing Express's default HTML
+  // error/stack-trace page with the API's own `{ error: string }` JSON
+  // contract every other response already uses.
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }

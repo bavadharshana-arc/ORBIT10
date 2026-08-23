@@ -2,47 +2,12 @@ import type { Request, Response } from "express";
 import { createUser, loginUser, requestPasswordReset, resetPasswordWithToken } from "../services/user.service";
 import { sendPasswordResetEmail, isRealEmailProviderConfigured } from "../services/email.service";
 import { signToken } from "../utils/jwt";
-import { Prisma } from "../generated/prisma/client";
+import { isDbUnreachableError, logError } from "../lib/logger";
 
 const MIN_PASSWORD_LENGTH = 8;
 
 /** Where the frontend lives — used to build the link a reset email points at. Configurable so a deployment's real domain never has to be hardcoded. */
 const getFrontendUrl = (): string => process.env.FRONTEND_URL ?? "http://localhost:5173";
-
-/**
- * Prisma error codes meaning "the database itself couldn't be reached" —
- * as opposed to a query that ran fine and returned/rejected normally.
- * P1001: can't reach the database server. P1002: reached it but the
- * connection timed out. P1008: operation timed out. P1017: the server
- * closed the connection (e.g. a pooled connection that went stale while
- * idle — the local `prisma dev` database can do this after the app has
- * sat untouched for a long stretch, which is what turns a login attempt
- * hours later into an opaque 500).
- */
-const DB_UNREACHABLE_CODES = new Set(["P1001", "P1002", "P1008", "P1017"]);
-
-const isDbUnreachableError = (error: unknown): boolean =>
-  error instanceof Prisma.PrismaClientKnownRequestError && DB_UNREACHABLE_CODES.has(error.code);
-
-/**
- * Logs an unhandled auth-route error so it's unmistakable in the dev
- * terminal instead of scrolling past as an anonymous 500 — a database
- * connectivity failure (see isDbUnreachableError above) is tagged and
- * called out separately from a genuinely unexpected bug, since the fix
- * for each is different (restart the local db vs. actually debug code).
- */
-const logAuthError = (context: string, error: unknown): void => {
-  if (isDbUnreachableError(error)) {
-    console.error(
-      `[${context}] Database unreachable — is the local Postgres dev server running ` +
-        "(\"npm run db\" / \"prisma dev\")? Underlying error:",
-      error,
-    );
-    return;
-  }
-
-  console.error(`[${context}] Unhandled error:`, error);
-};
 
 export const register = async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
@@ -65,7 +30,7 @@ export const register = async (req: Request, res: Response) => {
       return res.status(409).json({ error: error.message });
     }
 
-    console.error("[auth.register] Unhandled error:", error);
+    logError("auth.register", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -93,7 +58,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: error.message });
     }
 
-    logAuthError("auth.login", error);
+    logError("auth.login", error);
 
     // A database-connectivity failure isn't a bad password and isn't an
     // unexpected server bug either — it's a dependency that's temporarily
@@ -169,7 +134,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
       ...(token && !isProduction && !hasRealProvider ? { devResetToken: token } : {}),
     });
   } catch (error) {
-    console.error("[auth.forgotPassword] Unhandled error:", error);
+    logError("auth.forgotPassword", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -193,7 +158,7 @@ export const resetPassword = async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
 
-    console.error("[auth.resetPassword] Unhandled error:", error);
+    logError("auth.resetPassword", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

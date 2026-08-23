@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as projectService from "../services/project.service";
 import type { ProjectWriteFields } from "../services/project.service";
+import { logError } from "../lib/logger";
 
 // Phase 19 Frontend Integration audit fix (Priority 8): "YYYY-MM-DD"
 // date-only strings, same convention/validation as task.controller.ts's
@@ -108,6 +109,7 @@ export const createProject = async (req: Request, res: Response) => {
     );
     return res.status(201).json(project);
   } catch (error) {
+    logError("project.createProject", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -117,6 +119,7 @@ export const listProjects = async (req: Request, res: Response) => {
     const projects = await projectService.listProjectsForWorkspace(req.params.id as string);
     return res.status(200).json(projects);
   } catch (error) {
+    logError("project.listProjects", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -134,6 +137,7 @@ export const getProject = async (req: Request, res: Response) => {
 
     return res.status(200).json(project);
   } catch (error) {
+    logError("project.getProject", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -170,6 +174,7 @@ export const updateProject = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Project not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("project.updateProject", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -182,6 +187,7 @@ export const deleteProject = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Project not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("project.deleteProject", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

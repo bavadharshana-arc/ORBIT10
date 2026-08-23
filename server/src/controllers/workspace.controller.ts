@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as workspaceService from "../services/workspace.service";
 import { findUserByEmail } from "../services/user.service";
+import { logError } from "../lib/logger";
 
 export const createWorkspace = async (req: Request, res: Response) => {
   const { name } = req.body;
@@ -13,6 +14,7 @@ export const createWorkspace = async (req: Request, res: Response) => {
     const workspace = await workspaceService.createWorkspace(req.userId!, name.trim());
     return res.status(201).json(workspace);
   } catch (error) {
+    logError("workspace.createWorkspace", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -22,6 +24,7 @@ export const listWorkspaces = async (req: Request, res: Response) => {
     const workspaces = await workspaceService.listWorkspacesForUser(req.userId!);
     return res.status(200).json(workspaces);
   } catch (error) {
+    logError("workspace.listWorkspaces", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -36,6 +39,7 @@ export const getWorkspace = async (req: Request, res: Response) => {
 
     return res.status(200).json(workspace);
   } catch (error) {
+    logError("workspace.getWorkspace", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -85,6 +89,7 @@ export const updateWorkspace = async (req: Request, res: Response) => {
     });
     return res.status(200).json(workspace);
   } catch (error) {
+    logError("workspace.updateWorkspace", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -94,6 +99,7 @@ export const deleteWorkspace = async (req: Request, res: Response) => {
     await workspaceService.deleteWorkspace(req.params.id as string);
     return res.status(204).send();
   } catch (error) {
+    logError("workspace.deleteWorkspace", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -103,6 +109,7 @@ export const listMembers = async (req: Request, res: Response) => {
     const members = await workspaceService.listMembers(req.params.id as string);
     return res.status(200).json(members);
   } catch (error) {
+    logError("workspace.listMembers", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -151,6 +158,7 @@ export const addMember = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "User is already a member of this workspace") {
       return res.status(409).json({ error: error.message });
     }
+    logError("workspace.addMember", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -180,6 +188,7 @@ export const updateMemberRole = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Cannot demote the last OWNER of a workspace") {
       return res.status(409).json({ error: error.message });
     }
+    logError("workspace.updateMemberRole", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -202,6 +211,7 @@ export const removeMember = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Cannot remove the last OWNER of a workspace") {
       return res.status(409).json({ error: error.message });
     }
+    logError("workspace.removeMember", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as objectiveService from "../services/objective.service";
 import * as projectService from "../services/project.service";
 import type { ObjectiveWriteInput } from "../services/objective.service";
+import { logError } from "../lib/logger";
 
 export const createObjective = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -21,6 +22,7 @@ export const createObjective = async (req: Request, res: Response) => {
     const objective = await objectiveService.createObjective(projectId, text.trim());
     return res.status(201).json(objective);
   } catch (error) {
+    logError("objective.createObjective", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -38,6 +40,7 @@ export const listObjectives = async (req: Request, res: Response) => {
     const objectives = await objectiveService.listObjectivesForProject(projectId);
     return res.status(200).json(objectives);
   } catch (error) {
+    logError("objective.listObjectives", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -76,6 +79,7 @@ export const updateObjective = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Objective not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("objective.updateObjective", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -97,6 +101,7 @@ export const deleteObjective = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Objective not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("objective.deleteObjective", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
