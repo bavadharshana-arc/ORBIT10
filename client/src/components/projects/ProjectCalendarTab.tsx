@@ -10,7 +10,7 @@ import { loadMembers } from "../../data/teamData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { useAuth } from "../../context/AuthContext";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
+import { notifyTaskCompleted } from "../../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../../data/taskData";
 import { buildMonthGrid, groupTasksByDay } from "../../data/calendarGrid";
 import { Pill } from "../ui/Pill";
@@ -142,16 +142,6 @@ export function ProjectCalendarTab() {
       priority: values.priority,
       dueDate: values.dueDate ?? null,
       assigneeId: values.assigneeKeys[0] ?? null,
-    });
-
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      taskId: selectedTask.id,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: `/projects/${project.id}/calendar`,
     });
 
     if (changes.justCompleted) {

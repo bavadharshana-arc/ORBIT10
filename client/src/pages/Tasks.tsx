@@ -30,7 +30,6 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 import {
-  notifyTaskAssigned,
   notifyTaskCompleted,
 } from "../data/systemNotifications";
 
@@ -797,19 +796,6 @@ export default function Tasks() {
       dueDate: values.dueDate ?? null,
       assigneeId: values.assigneeKeys[0] ?? null,
     });
-
-    notifyTaskAssigned(
-      addNotification,
-      {
-        taskTitle: selectedTask.title,
-        taskId: selectedTask.id,
-        projectName: selectedTask.project,
-        assigneeId: values.assigneeKeys[0],
-        actorId: user?.id,
-        actor: currentActor,
-        actionHref: "/tasks",
-      }
-    );
 
     if (changes.justCompleted) {
       notifyTaskCompleted(
