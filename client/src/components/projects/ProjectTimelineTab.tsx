@@ -18,7 +18,7 @@ import {
 import { loadMembers } from "../../data/teamData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
+import { notifyTaskCompleted } from "../../data/systemNotifications";
 import { useAuth } from "../../context/AuthContext";
 import {
   DAY_WIDTH,
@@ -147,16 +147,6 @@ export function ProjectTimelineTab() {
       priority: values.priority,
       dueDate: values.dueDate ?? null,
       assigneeId: values.assigneeKeys[0] ?? null,
-    });
-
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      taskId: selectedTask.id,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: `/projects/${project.id}/timeline`,
     });
 
     if (changes.justCompleted) {

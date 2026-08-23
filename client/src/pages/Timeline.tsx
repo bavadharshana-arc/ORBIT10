@@ -17,7 +17,7 @@ import { loadMembers } from "../data/teamData";
 import { resolveCurrentActor } from "../data/workspaceData";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../data/systemNotifications";
+import { notifyTaskCompleted } from "../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../data/taskData";
 import {
   TaskDetailsDrawer,
@@ -423,16 +423,6 @@ export default function Timeline() {
       priority: values.priority,
       dueDate: values.dueDate ?? null,
       assigneeId: values.assigneeKeys[0] ?? null,
-    });
-
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      taskId: selectedTask.id,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: "/timeline",
     });
 
     if (changes.justCompleted) {

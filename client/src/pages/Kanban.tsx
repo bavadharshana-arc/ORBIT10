@@ -59,7 +59,6 @@ import { useWorkspace } from "../context/workspaceContextValue";
 import { useNotificationContext } from "../context/notificationContextValue";
 import { useTaskCommentHandlers } from "../hooks/useTaskCommentHandlers";
 import {
-  notifyTaskAssigned,
   notifyTaskCompleted,
 } from "../data/systemNotifications";
 import { ApiError } from "../lib/api";
@@ -1181,9 +1180,9 @@ export default function Kanban() {
   // Timeline.tsx use for their own TaskDetailsDrawer, reusing that exact
   // existing component rather than a second task-detail view. Also
   // hydrated from `?task=<id>` (systemNotifications.ts's withTaskParam)
-  // so a notification generated from this page (notifyTaskAssigned/
-  // notifyTaskCompleted/comment notifications below all point their
-  // actionHref at "/kanban") actually opens the right task on click,
+  // so a notification generated from this page (notifyTaskCompleted/
+  // comment notifications below all point their actionHref at
+  // "/kanban") actually opens the right task on click,
   // instead of just landing on the board — the same deep-link contract
   // every other task-list view already honors.
   const [searchParams] = useSearchParams();
@@ -1649,16 +1648,6 @@ export default function Kanban() {
       priority: values.priority,
       dueDate: values.dueDate ?? null,
       assigneeId: values.assigneeKeys[0] ?? null,
-    });
-
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      taskId: selectedTask.id,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: "/kanban",
     });
 
     if (changes.justCompleted) {

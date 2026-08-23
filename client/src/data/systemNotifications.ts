@@ -33,37 +33,12 @@ export function withTaskParam(href: string, taskId: string): string {
    correctly at all.
 ============================================================ */
 
-export function notifyTaskAssigned(
-  addNotification: Notify,
-  params: {
-    taskTitle: string;
-    /** Real task id — appended to actionHref so the click opens this specific task, not just its list. */
-    taskId: string;
-    projectName: string;
-    /** Real assignee userId — the notification's recipient. */
-    assigneeId: string | null | undefined;
-    /** Real caller userId — assigning a task to yourself isn't worth notifying about. */
-    actorId: string | null | undefined;
-    actor: WorkspaceActor;
-    actionHref: string;
-  }
-): void {
-  const { taskTitle, taskId, projectName, assigneeId, actorId, actor, actionHref } = params;
-
-  if (!assigneeId || assigneeId === actorId) {
-    return;
-  }
-
-  addNotification({
-    type: "assignment",
-    title: "You were assigned a task",
-    message: `${actor.name} assigned you "${taskTitle}" in ${projectName}.`,
-    recipientId: assigneeId,
-    actionHref: withTaskParam(actionHref, taskId),
-  });
-}
-
-
+// notifyTaskAssigned was removed (Step 8 follow-up): task assignment now
+// notifies the new assignee from the backend itself (task.controller.ts's
+// updateTask, diffing the real previous assigneeId), which every task-save
+// call site below reaches through the same one PATCH — a client-side
+// trigger here would double-notify. Task completion has no backend
+// trigger yet, so notifyTaskCompleted stays exactly as it was.
 export function notifyTaskCompleted(
   addNotification: Notify,
   params: {
