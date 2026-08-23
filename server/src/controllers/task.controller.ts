@@ -4,6 +4,7 @@ import * as projectService from "../services/project.service";
 import * as workspaceService from "../services/workspace.service";
 import * as notificationService from "../services/notification.service";
 import type { TaskWriteInput } from "../services/task.service";
+import { logError } from "../lib/logger";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -131,6 +132,7 @@ export const createTask = async (req: Request, res: Response) => {
     const task = await taskService.createTask(projectId, parsed.value as TaskWriteInput & { title: string });
     return res.status(201).json(task);
   } catch (error) {
+    logError("task.createTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -148,6 +150,7 @@ export const listTasks = async (req: Request, res: Response) => {
     const tasks = await taskService.listTasksForProject(projectId);
     return res.status(200).json(tasks);
   } catch (error) {
+    logError("task.listTasks", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -169,6 +172,7 @@ export const getTask = async (req: Request, res: Response) => {
     }
     return res.status(200).json(task);
   } catch (error) {
+    logError("task.getTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -228,6 +232,7 @@ export const updateTask = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Task not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("task.updateTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -249,6 +254,7 @@ export const deleteTask = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Task not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("task.deleteTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

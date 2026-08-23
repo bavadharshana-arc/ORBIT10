@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as projectFileService from "../services/projectFile.service";
 import * as projectService from "../services/project.service";
+import { logError } from "../lib/logger";
 
 export const createFile = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -49,6 +50,7 @@ export const createFile = async (req: Request, res: Response) => {
     });
     return res.status(201).json(file);
   } catch (error) {
+    logError("projectFile.createFile", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -66,6 +68,7 @@ export const listFiles = async (req: Request, res: Response) => {
     const files = await projectFileService.listFilesForProject(projectId);
     return res.status(200).json(files);
   } catch (error) {
+    logError("projectFile.listFiles", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -87,6 +90,7 @@ export const deleteFile = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "File not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("projectFile.deleteFile", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

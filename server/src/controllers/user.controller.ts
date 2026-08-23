@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import * as userService from "../services/user.service";
+import { logError } from "../lib/logger";
 
 export const getMe = async (req: Request, res: Response) => {
   if (!req.userId) {
@@ -15,6 +16,7 @@ export const getMe = async (req: Request, res: Response) => {
 
     return res.status(200).json(user);
   } catch (error) {
+    logError("user.getMe", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -102,6 +104,7 @@ export const updateMe = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Email already registered") {
       return res.status(409).json({ error: error.message });
     }
+    logError("user.updateMe", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -138,6 +141,7 @@ export const changeMyPassword = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "User not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("user.changeMyPassword", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -163,6 +167,7 @@ export const deleteMe = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "User not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("user.deleteMe", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as commentService from "../services/comment.service";
 import * as taskService from "../services/task.service";
 import * as projectService from "../services/project.service";
+import { logError } from "../lib/logger";
 
 /**
  * Verifies the project belongs to the workspace and the task belongs to
@@ -44,6 +45,7 @@ export const createComment = async (req: Request, res: Response) => {
     const comment = await commentService.createComment(resolved.taskId, req.userId!, text.trim());
     return res.status(201).json(comment);
   } catch (error) {
+    logError("comment.createComment", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -56,6 +58,7 @@ export const listComments = async (req: Request, res: Response) => {
     const comments = await commentService.listCommentsForTask(resolved.taskId);
     return res.status(200).json(comments);
   } catch (error) {
+    logError("comment.listComments", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -84,6 +87,7 @@ export const updateComment = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Only the comment author can edit this comment") {
       return res.status(403).json({ error: error.message });
     }
+    logError("comment.updateComment", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -110,6 +114,7 @@ export const deleteComment = async (req: Request, res: Response) => {
     ) {
       return res.status(403).json({ error: error.message });
     }
+    logError("comment.deleteComment", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

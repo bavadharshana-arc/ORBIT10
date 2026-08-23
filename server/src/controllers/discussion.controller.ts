@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as discussionService from "../services/discussion.service";
 import * as projectService from "../services/project.service";
+import { logError } from "../lib/logger";
 
 export const createDiscussion = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -41,6 +42,7 @@ export const createDiscussion = async (req: Request, res: Response) => {
     );
     return res.status(201).json(discussion);
   } catch (error) {
+    logError("discussion.createDiscussion", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -58,6 +60,7 @@ export const listDiscussions = async (req: Request, res: Response) => {
     const discussions = await discussionService.listDiscussionsForProject(projectId);
     return res.status(200).json(discussions);
   } catch (error) {
+    logError("discussion.listDiscussions", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -84,6 +87,7 @@ export const updateDiscussion = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Discussion not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("discussion.updateDiscussion", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -110,6 +114,7 @@ export const addReply = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Discussion not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("discussion.addReply", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -141,6 +146,7 @@ export const addReaction = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Already reacted with this emoji") {
       return res.status(409).json({ error: error.message });
     }
+    logError("discussion.addReaction", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -166,6 +172,7 @@ export const removeReaction = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Reaction not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("discussion.removeReaction", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
