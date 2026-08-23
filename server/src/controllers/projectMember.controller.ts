@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as projectMemberService from "../services/projectMember.service";
 import * as projectService from "../services/project.service";
+import * as notificationService from "../services/notification.service";
 
 export const listMembers = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -37,6 +38,26 @@ export const addMember = async (req: Request, res: Response) => {
 
   try {
     const member = await projectMemberService.addMember(workspaceId, projectId, userId, resolvedRole);
+
+    // Step 8: notify the newly-added member. Best-effort — a notification
+    // failure must never turn an otherwise-successful add into an error
+    // response.
+    try {
+      const project = await projectService.findProjectInWorkspace(workspaceId, projectId);
+      await notificationService.createNotification(
+        req.userId!,
+        {
+          type: "team",
+          title: "You were added to a project",
+          message: `You were added to ${project?.name ?? "a project"}.`,
+          actionHref: null,
+        },
+        userId,
+      );
+    } catch (notificationError) {
+      console.error("Failed to create project-member-added notification:", notificationError);
+    }
+
     return res.status(201).json(member);
   } catch (error) {
     if (error instanceof Error && error.message === "User must be a member of this workspace") {

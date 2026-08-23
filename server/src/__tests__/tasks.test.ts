@@ -343,4 +343,91 @@ describe("tasks", () => {
     );
     assert.equal(throughProject2.status, 404);
   });
+
+  test("assignment notification (Step 8): reassignment notifies the new assignee exactly once; an unchanged assigneeId, unassigning, and self-assignment all create none", async () => {
+    const owner = await registerAndLogin("task-assign-notify-owner");
+    const member = await registerAndLogin("task-assign-notify-member");
+    const { workspaceId, projectId } = await createWorkspaceWithProject(
+      owner,
+      "Assign Notify Workspace",
+      "Assign Notify Project",
+    );
+
+    await fetchJson(`${baseUrl}/api/workspaces/${workspaceId}/members`, {
+      method: "POST",
+      token: owner.token,
+      body: JSON.stringify({ email: member.email, role: "MEMBER" }),
+    });
+
+    const created = await fetchJson<TaskResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/tasks`,
+      { method: "POST", token: owner.token, body: JSON.stringify({ title: "Assign Notify Task" }) },
+    );
+    const taskId = created.body.id;
+
+    async function notificationsFor(token: string): Promise<Array<{ id: string; type: string }>> {
+      const response = await fetchJson<Array<{ id: string; type: string }>>(
+        `${baseUrl}/api/users/me/notifications`,
+        { token },
+      );
+      assert.equal(response.status, 200);
+      return response.body;
+    }
+
+    // (a) Reassigning the (currently unassigned) task to `member` creates
+    // exactly one new "assignment" notification for them.
+    const beforeAssign = await notificationsFor(member.token);
+    const assigned = await fetchJson<TaskResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`,
+      { method: "PATCH", token: owner.token, body: JSON.stringify({ assigneeId: member.id }) },
+    );
+    assert.equal(assigned.status, 200);
+    assert.equal(assigned.body.assigneeId, member.id);
+    const afterAssign = await notificationsFor(member.token);
+    const newAssignmentNotifications = afterAssign.filter(
+      (notification) =>
+        notification.type === "assignment" &&
+        !beforeAssign.some((existing) => existing.id === notification.id),
+    );
+    assert.equal(newAssignmentNotifications.length, 1);
+
+    // (b) Saving the task again with the SAME assigneeId (only another
+    // field changes) creates no new notification — unlike the existing
+    // frontend trigger, this must be gated on the assignee actually
+    // changing.
+    const unchanged = await fetchJson<TaskResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`,
+      {
+        method: "PATCH",
+        token: owner.token,
+        body: JSON.stringify({ assigneeId: member.id, title: "Assign Notify Task (edited)" }),
+      },
+    );
+    assert.equal(unchanged.status, 200);
+    const afterUnchanged = await notificationsFor(member.token);
+    assert.equal(afterUnchanged.length, afterAssign.length);
+
+    // (d) Unassigning (assigneeId -> null) creates no notification for the
+    // now-former assignee.
+    const unassigned = await fetchJson<TaskResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`,
+      { method: "PATCH", token: owner.token, body: JSON.stringify({ assigneeId: null }) },
+    );
+    assert.equal(unassigned.status, 200);
+    assert.equal(unassigned.body.assigneeId, null);
+    const afterUnassigned = await notificationsFor(member.token);
+    assert.equal(afterUnassigned.length, afterUnchanged.length);
+
+    // (c) Self-assignment (the actor assigns the task to themselves)
+    // creates no notification.
+    const beforeSelfAssign = await notificationsFor(owner.token);
+    const selfAssigned = await fetchJson<TaskResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`,
+      { method: "PATCH", token: owner.token, body: JSON.stringify({ assigneeId: owner.id }) },
+    );
+    assert.equal(selfAssigned.status, 200);
+    assert.equal(selfAssigned.body.assigneeId, owner.id);
+    const afterSelfAssign = await notificationsFor(owner.token);
+    assert.equal(afterSelfAssign.length, beforeSelfAssign.length);
+  });
 });

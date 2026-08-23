@@ -270,4 +270,41 @@ describe("project members", () => {
     );
     assert.equal(nonProjectMemberAddAttempt.status, 403);
   });
+
+  test("notification (Step 8): adding a project member creates exactly one 'team' notification for the added member", async () => {
+    const { owner, workspaceId, projectId } = await createProjectFixture(
+      "pm-notify-owner",
+      "PM Notify Workspace",
+      "PM Notify Project",
+    );
+    const addedMember = await registerAndLogin("pm-notify-added-member");
+    await fetchJson(`${baseUrl}/api/workspaces/${workspaceId}/members`, {
+      method: "POST",
+      token: owner.token,
+      body: JSON.stringify({ email: addedMember.email, role: "MEMBER" }),
+    });
+
+    const beforeAdd = await fetchJson<Array<{ id: string; type: string }>>(
+      `${baseUrl}/api/users/me/notifications`,
+      { token: addedMember.token },
+    );
+    assert.equal(beforeAdd.status, 200);
+
+    const added = await fetchJson<ProjectMemberResponse>(
+      `${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/members`,
+      { method: "POST", token: owner.token, body: JSON.stringify({ userId: addedMember.id, role: "Viewer" }) },
+    );
+    assert.equal(added.status, 201);
+
+    const afterAdd = await fetchJson<Array<{ id: string; type: string }>>(
+      `${baseUrl}/api/users/me/notifications`,
+      { token: addedMember.token },
+    );
+    assert.equal(afterAdd.status, 200);
+    const newTeamNotifications = afterAdd.body.filter(
+      (notification) =>
+        notification.type === "team" && !beforeAdd.body.some((existing) => existing.id === notification.id),
+    );
+    assert.equal(newTeamNotifications.length, 1);
+  });
 });
