@@ -37,10 +37,20 @@ export function createApp() {
   // lets the browser read responses it could already get via curl.
   //
   // ORBIT Step 5 (Authentication Rate Limiting follow-up — CORS):
-  // restricted to the one real frontend origin anyway, via the same
+  // restricted to real frontend origins anyway, via the same
   // FRONTEND_URL env var auth.controller.ts already uses to build the
   // password-reset link (server/README.md).
-  app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173" }));
+  //
+  // Production deployment follow-up: a single static origin can't serve
+  // both dev and prod at once — once FRONTEND_URL is set to the deployed
+  // Vercel origin, the http://localhost:5173 fallback it used to provide
+  // stops applying. localhost stays allowed unconditionally alongside
+  // whatever FRONTEND_URL is set to, so local dev keeps working the same
+  // way it always did. Still an explicit allowlist, no wildcard.
+  const allowedOrigins = ["http://localhost:5173", process.env.FRONTEND_URL].filter(
+    (origin): origin is string => Boolean(origin),
+  );
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
 
   app.get("/api/health", (_req, res) => {
