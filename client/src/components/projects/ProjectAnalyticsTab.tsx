@@ -7,6 +7,7 @@ import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useIsDarkMode } from "../../hooks/useIsDarkMode";
 import { LIGHT_THEME, DARK_THEME } from "../../data/chartTheme";
 import { getMemberWorkload, getTaskCompletedAt } from "../../data/workspaceData";
+import { mapProjectMemberToTeamMember } from "../../data/teamData";
 import { StatCard } from "../dashboard/StatCard";
 import { ProgressRing } from "../ui/ProgressRing";
 import { Avatar } from "../ui/Avatar";
@@ -29,7 +30,7 @@ function buildWeekBuckets(count: number) {
 }
 
 export function ProjectAnalyticsTab() {
-  const { project, projectTasks } = useProjectWorkspace();
+  const { project, projectTasks, projectMembers } = useProjectWorkspace();
   const isDark = useIsDarkMode();
   const theme = isDark ? DARK_THEME : LIGHT_THEME;
 
@@ -60,14 +61,14 @@ export function ProjectAnalyticsTab() {
 
   const workloadRows = useMemo(() => {
     const seen = new Map<string, { initials: string; bg: string; fg?: string }>();
-    project.people.forEach((person) => seen.set(person.initials, person));
+    projectMembers.map(mapProjectMemberToTeamMember).forEach((person) => seen.set(person.initials, person));
     projectTasks.forEach((task) => (task.assignees ?? []).forEach((assignee) => seen.set(assignee.initials, assignee)));
 
     return Array.from(seen.values())
       .map((person) => ({ person, workload: getMemberWorkload(person.initials, projectTasks) }))
       .sort((a, b) => b.workload.total - a.workload.total)
       .slice(0, 8);
-  }, [project.people, projectTasks]);
+  }, [projectMembers, projectTasks]);
 
   const maxWorkload = Math.max(1, ...workloadRows.map((row) => row.workload.total));
 

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as discussionAttachmentService from "../services/discussionAttachment.service";
 import * as projectService from "../services/project.service";
+import { logError } from "../lib/logger";
 
 export const addAttachment = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -34,6 +35,7 @@ export const addAttachment = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "File is already attached to this discussion") {
       return res.status(409).json({ error: error.message });
     }
+    logError("discussionAttachment.addAttachment", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -59,6 +61,7 @@ export const removeAttachment = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Attachment not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("discussionAttachment.removeAttachment", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

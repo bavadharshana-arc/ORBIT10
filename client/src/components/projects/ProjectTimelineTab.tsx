@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
 import { useTaskContext } from "../../context/taskContextValue";
@@ -17,7 +18,7 @@ import {
 import { loadMembers } from "../../data/teamData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
+import { notifyTaskCompleted } from "../../data/systemNotifications";
 import { useAuth } from "../../context/AuthContext";
 import {
   DAY_WIDTH,
@@ -60,7 +61,15 @@ export function ProjectTimelineTab() {
   const assigneeOptions = useMemo(() => buildWorkspaceAssigneeOptions(workspaceMembers), [workspaceMembers]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
+  const [searchParams] = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => searchParams.get("task"));
 
   const dayWidth = DAY_WIDTH.week;
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -140,18 +149,10 @@ export function ProjectTimelineTab() {
       assigneeId: values.assigneeKeys[0] ?? null,
     });
 
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: `/projects/${project.id}/timeline`,
-    });
-
     if (changes.justCompleted) {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
+        taskId: selectedTask.id,
         projectName: selectedTask.project,
         assigneeId: values.assigneeKeys[0],
         actorId: user?.id,
@@ -205,6 +206,7 @@ export function ProjectTimelineTab() {
                 dayWidth={dayWidth}
                 daysWidth={daysWidth}
                 totalWidth={totalWidth}
+                isSelected={task.id === selectedTaskId}
                 onSelect={() => setSelectedTaskId(task.id)}
               />
             ))

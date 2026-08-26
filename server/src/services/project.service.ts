@@ -1,5 +1,17 @@
 import { prisma } from "../lib/prisma";
 
+// Phase 19 Frontend Integration audit fix (Priority 8): the fields
+// CreateProjectDrawer.tsx collects beyond name/description. Optional on
+// both create and update, same as description already was — a caller
+// that doesn't send them just doesn't set/change them.
+export type ProjectWriteFields = {
+  description?: string;
+  tag?: string | null;
+  color?: string | null;
+  startDate?: Date | null;
+  dueDate?: Date | null;
+};
+
 /**
  * Creates a project and auto-adds its creator as a project Owner
  * (Phase 10) — without this, a newly created project would have no
@@ -12,22 +24,13 @@ export const createProject = async (
   workspaceId: string,
   creatorId: string,
   name: string,
-  description?: string,
+  fields: ProjectWriteFields = {},
 ) => {
-  if (description !== undefined) {
-    return prisma.project.create({
-      data: {
-        workspaceId,
-        name,
-        description,
-        projectMembers: { create: { userId: creatorId, role: "Owner" } },
-      },
-    });
-  }
   return prisma.project.create({
     data: {
       workspaceId,
       name,
+      ...fields,
       projectMembers: { create: { userId: creatorId, role: "Owner" } },
     },
   });
@@ -47,7 +50,7 @@ export const findProjectInWorkspace = async (workspaceId: string, projectId: str
 export const updateProject = async (
   workspaceId: string,
   projectId: string,
-  data: { name?: string; description?: string },
+  data: { name?: string } & ProjectWriteFields,
 ) => {
   const project = await findProjectInWorkspace(workspaceId, projectId);
   if (!project) {

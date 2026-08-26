@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from "./api";
+import { apiDelete, apiGet, apiPatch } from "./api";
 
 /* ============================================================
    USER PROFILE API
@@ -32,4 +32,18 @@ export function getMyProfile(): Promise<UserProfile> {
 /** Partial update — only send the keys that actually changed. */
 export function updateMyProfile(patch: ProfileUpdate): Promise<UserProfile> {
   return apiPatch<UserProfile>("/users/me", patch);
+}
+
+/* ============================================================
+   PASSWORD / ACCOUNT (Phase 19 Frontend Integration audit fix)
+   Mirrors user.controller.ts's changeMyPassword/deleteMe.
+============================================================ */
+
+export function changeMyPassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  return apiPatch<{ message: string }>("/users/me/password", { currentPassword, newPassword });
+}
+
+/** Self-deletes the signed-in account. The backend refuses this for the permanent demo accounts. */
+export function deleteMyAccount(): Promise<void> {
+  return apiDelete("/users/me");
 }

@@ -1,14 +1,14 @@
 import { Fragment, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Plus } from "lucide-react";
-import type { Project } from "../../types/dashboard";
+import type { Project, TeamMember } from "../../types/dashboard";
 import { Pill } from "../ui/Pill";
 import { AvatarStack } from "../ui/AvatarStack";
 import { useProjectContext } from "../../context/projectContextValue";
 import { useTaskContext } from "../../context/taskContextValue";
 import { useWorkspace } from "../../context/workspaceContextValue";
 import { useNotificationContext } from "../../context/notificationContextValue";
-import { loadMembers } from "../../data/teamData";
+import { loadMembers, mapProjectMemberToTeamMember } from "../../data/teamData";
 import { formatProjectDue } from "../../data/projectData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { notifyProjectCreated } from "../../data/systemNotifications";
@@ -20,6 +20,8 @@ import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRo
 
 interface ProjectRowProps {
   project: Project;
+  /** This project's real roster, mapped to display avatars — see ProjectContext.tsx's projectMembersByProjectId. */
+  people: TeamMember[];
   onSelect: () => void;
 }
 
@@ -30,7 +32,7 @@ function getStatusColor(progress: number): string {
 }
 
 
-function ProjectRow({ project, onSelect }: ProjectRowProps) {
+function ProjectRow({ project, people, onSelect }: ProjectRowProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -68,7 +70,7 @@ function ProjectRow({ project, onSelect }: ProjectRowProps) {
         </div>
       </div>
 
-      <AvatarStack people={project.people} />
+      <AvatarStack people={people} />
 
       <div className="w-16 sm:w-20 lg:w-[92px]">
         <div style={{ height: 5, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
@@ -84,7 +86,7 @@ function ProjectRow({ project, onSelect }: ProjectRowProps) {
         </div>
         <div className="flex items-center" style={{ gap: 5, marginTop: 5, justifyContent: "flex-end" }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: getStatusColor(project.progress), flexShrink: 0 }} />
-          <span className="text-ink-3" style={{ fontSize: 11 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)" }}>
             {project.progress}%
           </span>
         </div>
@@ -99,7 +101,7 @@ function ProjectRow({ project, onSelect }: ProjectRowProps) {
 }
 
 export function ProjectsWidget() {
-  const { projects, setProjects } = useProjectContext();
+  const { projects, setProjects, projectMembersByProjectId, addProjectMember } = useProjectContext();
   const { workspaceMembers } = useTaskContext();
   const { currentWorkspaceId } = useWorkspace();
   const { addNotification } = useNotificationContext();
@@ -131,26 +133,43 @@ export function ProjectsWidget() {
       const record = await createProjectRequest(currentWorkspaceId, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       const newProject: Project = {
         id: record.id,
         name: record.name,
-        tag: values.tag,
+        tag: record.tag ?? "",
         progress: 0,
         tasks: "0 / 0 tasks",
-        due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-        people: values.people,
+        due: dueDate ? formatProjectDue(dueDate) : "No due date",
         description: record.description ?? undefined,
-        color: values.color,
-        startDate: values.startDate || undefined,
-        dueDate: values.dueDate || undefined,
+        color: record.color ?? undefined,
+        startDate: record.startDate?.slice(0, 10),
+        dueDate,
         createdAt: record.createdAt,
         memberRoles: { [currentActor.initials]: "Owner" },
       };
 
       setProjects((current) => [newProject, ...current]);
       setIsDrawerOpen(false);
+
+      // See Projects.tsx's handleCreateProject — same real, best-effort
+      // ProjectMember adds, kept in sync via the same shared
+      // ProjectContext this widget also renders from.
+      const otherMemberIds = values.memberUserIds.filter((id) => id !== user?.id);
+      await Promise.all(
+        otherMemberIds.map((userId) =>
+          addProjectMember(newProject.id, userId, "Viewer").catch((error: unknown) =>
+            console.error("Couldn't add project member:", error),
+          ),
+        ),
+      );
 
       notifyProjectCreated(addNotification, {
         projectName: newProject.name,
@@ -206,13 +225,22 @@ export function ProjectsWidget() {
       <div style={{ marginTop: 6 }}>
         {projects.map((project, i) => (
           <Fragment key={project.id}>
-            <ProjectRow project={project} onSelect={() => navigate(`/projects/${project.id}`)} />
+            <ProjectRow
+              project={project}
+              people={(projectMembersByProjectId[project.id] ?? []).map(mapProjectMemberToTeamMember)}
+              onSelect={() => navigate(`/projects/${project.id}`)}
+            />
             {i < projects.length - 1 && <div className="border-soft-t" />}
           </Fragment>
         ))}
       </div>
 
-      <CreateProjectDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} onCreate={handleCreateProject} />
+      <CreateProjectDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onCreate={handleCreateProject}
+        workspaceMembers={workspaceMembers.filter((member) => member.userId !== user?.id)}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   ListChecks,
   FolderOpen,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import { useTaskContext } from "../context/taskContextValue";
 import { useNotificationContext } from "../context/notificationContextValue";
@@ -16,7 +17,7 @@ import { loadMembers } from "../data/teamData";
 import { resolveCurrentActor } from "../data/workspaceData";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../data/systemNotifications";
+import { notifyTaskCompleted } from "../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../data/taskData";
 import {
   TaskDetailsDrawer,
@@ -228,7 +229,15 @@ export default function Timeline() {
   const [collapsedProjects, setCollapsedProjects] = useState<
     Record<string, boolean>
   >({});
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
+  const [searchParams] = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => searchParams.get("task"));
 
   const dayWidth = DAY_WIDTH[viewMode];
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -416,18 +425,10 @@ export default function Timeline() {
       assigneeId: values.assigneeKeys[0] ?? null,
     });
 
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: "/timeline",
-    });
-
     if (changes.justCompleted) {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
+        taskId: selectedTask.id,
         projectName: selectedTask.project,
         assigneeId: values.assigneeKeys[0],
         actorId: user?.id,
@@ -736,6 +737,7 @@ export default function Timeline() {
                           dayWidth={dayWidth}
                           daysWidth={daysWidth}
                           totalWidth={totalWidth}
+                          isSelected={task.id === selectedTaskId}
                           onSelect={() => setSelectedTaskId(task.id)}
                         />
                       ))}
@@ -792,7 +794,12 @@ export default function Timeline() {
 
       <TaskDetailsDrawer
         task={selectedTask}
-        isOpen={selectedTask !== null}
+        // Distinct from every other page's `isOpen={selectedTask !== null}`
+        // on purpose: opens on "a task id was selected" rather than "a
+        // task was found", so a stale/deleted/still-loading id shows the
+        // drawer's own "Task not found" fallback instead of silently not
+        // opening at all — see TaskDetailsDrawer.tsx's DO NOT RENDER block.
+        isOpen={selectedTaskId !== null}
         statusOptions={STATUS_OPTIONS}
         assigneeOptions={ASSIGNEE_OPTIONS}
         allowMultipleAssignees

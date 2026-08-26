@@ -1,7 +1,6 @@
-import { Bell } from "lucide-react";
-
 import type { NotificationSettings } from "../../data/settingsData";
-import { SectionCard, ToggleRow } from "./shared";
+import { Switch } from "../ui/Switch";
+import { SettingsGroup, SettingsGroupHeader, SettingsRow, SettingsSection } from "./shared";
 
 interface NotificationsSectionProps {
   notifications: NotificationSettings;
@@ -15,70 +14,72 @@ export function NotificationsSection({ notifications, accent, onChange }: Notifi
   }
 
   return (
-    <SectionCard icon={Bell} title="Notifications" description="Choose what you hear about, and how.">
-      <div className="flex flex-col" style={{ gap: 18 }}>
-        <div className="flex flex-col" style={{ gap: 8 }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#98A2B3", textTransform: "uppercase", letterSpacing: 0.4 }}>
-            Email
-          </p>
+    <SettingsSection title="Notifications" description="Choose what you hear about, and how.">
+      <div className="flex flex-col" style={{ gap: 8 }}>
+        <SettingsGroupHeader label="Email" />
+        <SettingsGroup>
+          <SettingsRow label="Task activity" description="Assignments, due dates, and status changes on your tasks.">
+            <Switch
+              checked={notifications.emailTaskActivity}
+              onChange={(value) => set("emailTaskActivity", value)}
+              accent={accent}
+              label="Task activity"
+            />
+          </SettingsRow>
 
-          <ToggleRow
-            title="Task activity"
-            description="Assignments, due dates, and status changes on your tasks."
-            checked={notifications.emailTaskActivity}
-            accent={accent}
-            onChange={(value) => set("emailTaskActivity", value)}
-          />
+          <SettingsRow label="Weekly digest" description="A summary of your team's progress every Monday.">
+            <Switch
+              checked={notifications.emailWeeklyDigest}
+              onChange={(value) => set("emailWeeklyDigest", value)}
+              accent={accent}
+              label="Weekly digest"
+            />
+          </SettingsRow>
 
-          <ToggleRow
-            title="Weekly digest"
-            description="A summary of your team's progress every Monday."
-            checked={notifications.emailWeeklyDigest}
-            accent={accent}
-            onChange={(value) => set("emailWeeklyDigest", value)}
-          />
-
-          <ToggleRow
-            title="Product updates"
-            description="News about new Orbit features and improvements."
-            checked={notifications.emailProductUpdates}
-            accent={accent}
-            onChange={(value) => set("emailProductUpdates", value)}
-          />
-        </div>
-
-        <div className="flex flex-col" style={{ gap: 8 }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#98A2B3", textTransform: "uppercase", letterSpacing: 0.4 }}>
-            Push
-          </p>
-
-          <ToggleRow
-            title="Push notifications"
-            description="Enable alerts on your desktop and mobile devices."
-            checked={notifications.pushEnabled}
-            accent={accent}
-            onChange={(value) => set("pushEnabled", value)}
-          />
-
-          <ToggleRow
-            title="Task reminders"
-            description="A nudge shortly before a task is due."
-            checked={notifications.pushTaskReminders}
-            disabled={!notifications.pushEnabled}
-            accent={accent}
-            onChange={(value) => set("pushTaskReminders", value)}
-          />
-
-          <ToggleRow
-            title="Mentions & comments"
-            description="When someone @mentions you or replies to a thread."
-            checked={notifications.pushMentions}
-            disabled={!notifications.pushEnabled}
-            accent={accent}
-            onChange={(value) => set("pushMentions", value)}
-          />
-        </div>
+          <SettingsRow label="Product updates" description="News about new Orbit features and improvements.">
+            <Switch
+              checked={notifications.emailProductUpdates}
+              onChange={(value) => set("emailProductUpdates", value)}
+              accent={accent}
+              label="Product updates"
+            />
+          </SettingsRow>
+        </SettingsGroup>
       </div>
-    </SectionCard>
+
+      <div className="flex flex-col" style={{ gap: 8 }}>
+        <SettingsGroupHeader label="Push" />
+        <SettingsGroup>
+          <SettingsRow label="Push notifications" description="Enable alerts on your desktop and mobile devices.">
+            <Switch
+              checked={notifications.pushEnabled}
+              onChange={(value) => set("pushEnabled", value)}
+              accent={accent}
+              label="Push notifications"
+            />
+          </SettingsRow>
+
+          <SettingsRow label="Task reminders" description="A nudge shortly before a task is due.">
+            <Switch
+              checked={notifications.pushTaskReminders}
+              disabled={!notifications.pushEnabled}
+              onChange={(value) => set("pushTaskReminders", value)}
+              accent={accent}
+              label="Task reminders"
+            />
+          </SettingsRow>
+
+          <SettingsRow label="Mentions & comments" description="When someone @mentions you or replies to a thread.">
+            <Switch
+              checked={notifications.pushMentions}
+              disabled={!notifications.pushEnabled}
+              onChange={(value) => set("pushMentions", value)}
+              accent={accent}
+              label="Mentions & comments"
+            />
+          </SettingsRow>
+        </SettingsGroup>
+      </div>
+    </SettingsSection>
   );
 }

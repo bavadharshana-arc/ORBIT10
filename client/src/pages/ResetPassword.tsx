@@ -1,6 +1,9 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { CheckCircle2, Eye, EyeOff } from "lucide-react";
+
+import { resetPasswordRequest } from "../lib/authApi";
+import { ApiError } from "../lib/api";
 
 /* The illustrated panel uses the actual reference/orbit-login.jpe artwork
    (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
@@ -25,12 +28,25 @@ const LINK_BLUE = "#3D5C99";
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Phase 19 Frontend Integration audit fix (Priority 2): the token
+  // ForgotPassword.tsx's dev-safe flow hands back in place of an emailed
+  // link (see auth.controller.ts's forgotPassword doc comment).
+  const token = searchParams.get("token");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!token) {
+      setError("This reset link is missing its token. Start over from Forgot password.");
+      return;
+    }
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
@@ -42,12 +58,17 @@ export default function ResetPassword() {
       return;
     }
 
-    /*
-     * No backend exists yet — a valid, matching password is treated
-     * as a successful mock password reset.
-     */
     setError(null);
-    setSubmitted(true);
+    setSubmitting(true);
+
+    try {
+      await resetPasswordRequest(token, password);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach the server. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -173,32 +194,58 @@ export default function ResetPassword() {
                   Choose a new password for your Orbit workspace.
                 </p>
 
-                <form onSubmit={handleSubmit} className="flex flex-col" style={{ gap: 30, marginTop: 30 }}>
-                  <input
-                    autoFocus
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="New password (at least 8 characters)"
-                    aria-label="New password"
-                    className="auth-field"
-                    style={fieldInputStyle}
-                  />
+                {!token && (
+                  <p style={{ margin: "14px 0 0", fontSize: 12, color: "#B3564B", textAlign: "center" }}>
+                    This page needs a reset link from Forgot password to work — go back and request one.
+                  </p>
+                )}
 
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="Confirm password"
-                    aria-label="Confirm password"
-                    className="auth-field"
-                    style={fieldInputStyle}
-                  />
+                <form onSubmit={handleSubmit} className="flex flex-col" style={{ gap: 30, marginTop: 30 }}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      autoFocus
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="New password (at least 8 characters)"
+                      aria-label="New password"
+                      className="auth-field"
+                      style={passwordFieldInputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      style={passwordToggleButtonStyle}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="Confirm password"
+                      aria-label="Confirm password"
+                      className="auth-field"
+                      style={passwordFieldInputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((current) => !current)}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      style={passwordToggleButtonStyle}
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
 
                   {error && <span style={{ fontSize: 11.5, color: "#B3564B" }}>{error}</span>}
 
-                  <button type="submit" className="lift" style={primaryButtonStyle}>
-                    Reset password
+                  <button type="submit" disabled={submitting || !token} className="lift" style={primaryButtonStyle}>
+                    {submitting ? "Resetting…" : "Reset password"}
                   </button>
                 </form>
               </>
@@ -241,6 +288,34 @@ const fieldInputStyle: CSSProperties = {
   width: "100%",
   padding: "10px 2px",
   transition: "border-color 150ms ease",
+};
+
+/* Same as fieldInputStyle, with extra right padding so typed text never
+   sits under the show/hide-password toggle button below. */
+const passwordFieldInputStyle: CSSProperties = {
+  ...fieldInputStyle,
+  paddingRight: 30,
+};
+
+/* The eye/eye-off toggle button overlaid on the right edge of a password
+   field — absolutely positioned within that field's `position: relative`
+   wrapper, transparent so it reads as an icon rather than a second
+   button. */
+const passwordToggleButtonStyle: CSSProperties = {
+  position: "absolute",
+  right: 2,
+  top: "50%",
+  transform: "translateY(-50%)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "transparent",
+  border: "none",
+  padding: 4,
+  margin: 0,
+  cursor: "pointer",
+  color: "var(--text-3)",
+  lineHeight: 0,
 };
 
 const primaryButtonStyle: CSSProperties = {

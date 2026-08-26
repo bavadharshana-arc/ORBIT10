@@ -2,7 +2,9 @@ import type { Request, Response } from "express";
 import * as taskService from "../services/task.service";
 import * as projectService from "../services/project.service";
 import * as workspaceService from "../services/workspace.service";
+import * as notificationService from "../services/notification.service";
 import type { TaskWriteInput } from "../services/task.service";
+import { logError } from "../lib/logger";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -130,6 +132,7 @@ export const createTask = async (req: Request, res: Response) => {
     const task = await taskService.createTask(projectId, parsed.value as TaskWriteInput & { title: string });
     return res.status(201).json(task);
   } catch (error) {
+    logError("task.createTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -147,6 +150,7 @@ export const listTasks = async (req: Request, res: Response) => {
     const tasks = await taskService.listTasksForProject(projectId);
     return res.status(200).json(tasks);
   } catch (error) {
+    logError("task.listTasks", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -168,6 +172,7 @@ export const getTask = async (req: Request, res: Response) => {
     }
     return res.status(200).json(task);
   } catch (error) {
+    logError("task.getTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -187,13 +192,47 @@ export const updateTask = async (req: Request, res: Response) => {
     return res.status(parsed.status).json({ error: parsed.error });
   }
 
+  // Captured before the write so the assignment-notification check below
+  // compares against the real previous value, not the just-written one —
+  // only fetched when assigneeId is actually part of this request.
+  const previousTask =
+    parsed.value.assigneeId !== undefined ? await taskService.findTaskInProject(projectId, taskId) : null;
+
   try {
     const task = await taskService.updateTask(projectId, taskId, parsed.value);
+
+    // Step 8: notify the new assignee on assignment/reassignment only —
+    // never on an unchanged assigneeId, a clear (null), or a
+    // self-assignment. Best-effort: a notification failure must never
+    // turn an otherwise-successful task update into an error response.
+    if (
+      parsed.value.assigneeId !== undefined &&
+      parsed.value.assigneeId !== null &&
+      parsed.value.assigneeId !== previousTask?.assigneeId &&
+      parsed.value.assigneeId !== req.userId
+    ) {
+      try {
+        await notificationService.createNotification(
+          req.userId!,
+          {
+            type: "assignment",
+            title: "You were assigned a task",
+            message: `You were assigned "${task.title}" in ${project.name}.`,
+            actionHref: null,
+          },
+          parsed.value.assigneeId,
+        );
+      } catch (notificationError) {
+        console.error("Failed to create task-assignment notification:", notificationError);
+      }
+    }
+
     return res.status(200).json(task);
   } catch (error) {
     if (error instanceof Error && error.message === "Task not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("task.updateTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -215,6 +254,7 @@ export const deleteTask = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Task not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("task.deleteTask", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

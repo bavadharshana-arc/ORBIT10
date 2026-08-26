@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import * as notificationService from "../services/notification.service";
+import { logError } from "../lib/logger";
 
 export const createNotification = async (req: Request, res: Response) => {
   const { type, title, message, actionHref, recipientId } = req.body ?? {};
@@ -42,6 +43,7 @@ export const createNotification = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Recipient must share a workspace with you") {
       return res.status(403).json({ error: error.message });
     }
+    logError("notification.createNotification", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -51,6 +53,7 @@ export const listNotifications = async (req: Request, res: Response) => {
     const notifications = await notificationService.listNotificationsForUser(req.userId!);
     return res.status(200).json(notifications);
   } catch (error) {
+    logError("notification.listNotifications", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -70,6 +73,7 @@ export const updateNotification = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Notification not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("notification.updateNotification", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -79,6 +83,22 @@ export const markAllRead = async (req: Request, res: Response) => {
     await notificationService.markAllAsRead(req.userId!);
     return res.status(204).send();
   } catch (error) {
+    logError("notification.markAllRead", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const deleteNotification = async (req: Request, res: Response) => {
+  const notificationId = req.params.notificationId as string;
+
+  try {
+    await notificationService.deleteNotification(req.userId!, notificationId);
+    return res.status(204).send();
+  } catch (error) {
+    if (error instanceof Error && error.message === "Notification not found") {
+      return res.status(404).json({ error: error.message });
+    }
+    logError("notification.deleteNotification", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -88,6 +108,7 @@ export const clearAll = async (req: Request, res: Response) => {
     await notificationService.clearAllNotifications(req.userId!);
     return res.status(204).send();
   } catch (error) {
+    logError("notification.clearAll", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

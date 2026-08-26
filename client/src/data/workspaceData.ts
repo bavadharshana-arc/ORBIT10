@@ -1,4 +1,4 @@
-import type { Project, ProjectPermission, TeamMember } from "../types/dashboard";
+import type { Project, ProjectPermission } from "../types/dashboard";
 import type { Task } from "./taskData";
 import type { Member } from "./teamData";
 import type { AuthUser } from "../types/auth";
@@ -7,7 +7,6 @@ import type {
   ActivityFeedItem,
   Discussion,
   FileKind,
-  ProjectFileRecord,
   WorkspaceActor,
 } from "../types/workspace";
 
@@ -51,20 +50,17 @@ export function formatRelativeTime(ms: number): string {
 
 
 
-export function matchMember(person: TeamMember, members: Member[]): Member | undefined {
-  return members.find((member) => member.initials === person.initials && member.bg === person.bg);
-}
+// matchMember/getProjectActors (matched TeamMember-shaped "people" against
+// the mock loadMembers() roster) were removed in the Phase 19 Frontend
+// Integration follow-up — Project.people is gone, and ProjectDiscussionsTab's
+// @mention actor list now maps straight from the real projectMembers
+// (ProjectContext) instead of fuzzy-matching a local field against a
+// mock list. Confirmed via grep before removal (both had zero remaining
+// callers once ProjectSettingsTab.tsx's own members section, the other
+// matchMember caller, was replaced by a pointer to the real Team tab).
 
 export function toActor(member: Member): WorkspaceActor {
   return { id: member.id, name: member.name, initials: member.initials, bg: member.bg, fg: member.fg };
-}
-
-export function getProjectActors(project: Project, members: Member[]): WorkspaceActor[] {
-  return project.people.map((person, index) => {
-    const matched = matchMember(person, members);
-    if (matched) return toActor(matched);
-    return { id: `unmatched-${person.initials}-${index}`, name: person.initials, initials: person.initials, bg: person.bg, fg: person.fg };
-  });
 }
 
 export function resolveCurrentActor(members: Member[], authUser: AuthUser | null): WorkspaceActor {
@@ -206,27 +202,13 @@ export function clearSessionObjectUrl(fileId: string): void {
   URL.revokeObjectURL(url);
   sessionObjectUrls.delete(fileId);
 }
-export function projectFilesKey(projectId: string): string {
-  return `orbit-project-files-${projectId}`;
-}
-
-export function readProjectFiles(projectId: string): ProjectFileRecord[] {
-  try {
-    const stored = localStorage.getItem(projectFilesKey(projectId));
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as ProjectFileRecord[]) : [];
-  } catch (error) {
-    console.error("Failed to load project files:", error);
-    return [];
-  }
-}
-
-// writeProjectFiles/appendProjectFile/seedFilesForProject (mock file
-// writes + demo seed generator) have zero remaining callers — confirmed
-// via grep before removal. readProjectFiles below is kept: it still has
-// one real (if stale) reader, ProjectOverviewTab.tsx's filesCount stat —
-// see that file's own comment for why it wasn't migrated in Stage 3.
+// projectFilesKey/readProjectFiles/writeProjectFiles/appendProjectFile/
+// seedFilesForProject (localStorage-backed mock file list + demo seed
+// generator) were removed in the Phase 19 Frontend Integration audit fix
+// (Priority 6 & 7) — ProjectOverviewTab.tsx's filesCount stat, the last
+// real (if stale) reader, now calls the real Files API
+// (lib/fileApi.ts's listFiles) instead, same one ProjectFilesTab.tsx's
+// own list already used. Confirmed via grep before removal.
 
 
 
@@ -238,25 +220,14 @@ export const DISCUSSION_TYPE_LABEL: Record<Discussion["type"], string> = {
   announcement: "Announcement",
 };
 
-export function discussionsKey(projectId: string): string {
-  return `orbit-project-discussions-${projectId}`;
-}
-
-export function readProjectDiscussions(projectId: string): Discussion[] {
-  try {
-    const stored = localStorage.getItem(discussionsKey(projectId));
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as Discussion[]) : [];
-  } catch (error) {
-    console.error("Failed to load project discussions:", error);
-    return [];
-  }
-}
-
-// seedDiscussionsForProject (demo seed generator) has zero remaining
-// callers — confirmed via grep before removal. readProjectDiscussions
-// below is kept for the same reason readProjectFiles is (see above).
+// discussionsKey/readProjectDiscussions/seedDiscussionsForProject
+// (localStorage-backed mock discussion list + demo seed generator) were
+// removed in the Phase 19 Frontend Integration follow-up (Fix
+// Discussions Count) — ProjectOverviewTab.tsx's discussionsCount stat,
+// the last real (if stale) reader, now calls the real Discussions API
+// (lib/discussionApi.ts's listDiscussions) instead, same one
+// ProjectDiscussionsTab.tsx's own list already used. Confirmed via grep
+// before removal.
 
 
 
@@ -269,11 +240,32 @@ export function readProjectDiscussions(projectId: string): Discussion[] {
 // is what made these fully dead — confirmed via a zero-results grep
 // before removal.
 
+/** The task's own creation timestamp — straight from Task.createdAt (see TaskContext.mapTaskRecordToTask). Null on tasks built by an optimistic create that hasn't been refetched yet, same caveat as getProjectCreatedAt. */
+export function getTaskCreatedAt(task: Task): number | null {
+  return typeof task.createdAt === "number" ? task.createdAt : null;
+}
+
 export function getTaskCompletedAt(task: Task): number | null {
+  // Prefer the session-local activity log when present — it's the more
+  // precise signal (timestamped at the moment the status actually
+  // flipped, during this session).
   const entry = [...(task.activity ?? [])].reverse().find((e) => e.text === "Status changed to Completed");
-  if (!entry) return null;
-  const ts = idTimestamp(entry.id, 0);
-  return ts > 0 ? ts : null;
+  if (entry) {
+    const ts = idTimestamp(entry.id, 0);
+    if (ts > 0) return ts;
+  }
+
+  // Fall back to Task.updatedAt for tasks loaded straight from the API —
+  // TaskContext seeds `activity` empty (real per-status history isn't
+  // fetched), so a task that was already Completed before this page load
+  // would otherwise never show up here at all. The backend has no
+  // dedicated completedAt column, so "last modified, while Completed" is
+  // the closest true signal available rather than a fabricated one.
+  if (task.status === "Completed" && typeof task.updatedAt === "number") {
+    return task.updatedAt;
+  }
+
+  return null;
 }
 
 function inferTaskEventType(text: string): ActivityFeedItem["type"] {

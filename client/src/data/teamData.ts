@@ -1,6 +1,7 @@
 import type { TeamMember } from "../types/dashboard";
 import type { AuthRole } from "../types/auth";
 import type { WorkspaceMemberRecord, WorkspaceRole } from "../lib/workspaceApi";
+import type { ProjectMemberRecord } from "../lib/projectMemberApi";
 
 
 export type MemberStatus = "Active" | "Away" | "Offline" | "Invited";
@@ -172,6 +173,24 @@ export function mapWorkspaceMemberToMember(record: WorkspaceMemberRecord): Membe
     fg: record.user.avatarFg ?? NEUTRAL_MEMBER_AVATAR.fg,
     tasksActive: 0,
     tasksCompleted: 0,
+  };
+}
+
+/**
+ * Adapts a real ProjectMemberRecord (lib/projectMemberApi.ts) onto the
+ * lightweight TeamMember shape used everywhere a project's roster is
+ * just rendered as avatars (AvatarStack, workload rows) rather than
+ * needing the full Member shape mapWorkspaceMemberToMember produces —
+ * project-member display never needs jobTitle/department/status, just
+ * who to draw. Real data, replacing the old Project.people local-only
+ * field removed in the Phase 19 Frontend Integration follow-up.
+ */
+export function mapProjectMemberToTeamMember(record: ProjectMemberRecord): TeamMember {
+  const name = record.user.name ?? record.user.email;
+  return {
+    initials: getInitials(name),
+    bg: record.user.avatarBg ?? NEUTRAL_MEMBER_AVATAR.bg,
+    fg: record.user.avatarFg ?? NEUTRAL_MEMBER_AVATAR.fg,
   };
 }
 

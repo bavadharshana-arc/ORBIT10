@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CalendarDays } from "lucide-react";
 import { MiniCalendar } from "../dashboard/MiniCalendar";
 import { useProjectWorkspace } from "../../context/projectWorkspaceContext";
@@ -9,7 +10,7 @@ import { loadMembers } from "../../data/teamData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
 import { useAuth } from "../../context/AuthContext";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
+import { notifyTaskCompleted } from "../../data/systemNotifications";
 import { getDueGroup, type Status, type Task } from "../../data/taskData";
 import { buildMonthGrid, groupTasksByDay } from "../../data/calendarGrid";
 import { Pill } from "../ui/Pill";
@@ -57,7 +58,15 @@ export function ProjectCalendarTab() {
   const grid = useMemo(() => buildMonthGrid(viewedMonth), [viewedMonth]);
   const isViewingCurrentMonth = grid.year === today.getFullYear() && grid.month === today.getMonth();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
+  const [searchParams] = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => searchParams.get("task"));
 
   function handlePrevMonth() {
     setViewedMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
@@ -135,18 +144,10 @@ export function ProjectCalendarTab() {
       assigneeId: values.assigneeKeys[0] ?? null,
     });
 
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: `/projects/${project.id}/calendar`,
-    });
-
     if (changes.justCompleted) {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
+        taskId: selectedTask.id,
         projectName: selectedTask.project,
         assigneeId: values.assigneeKeys[0],
         actorId: user?.id,

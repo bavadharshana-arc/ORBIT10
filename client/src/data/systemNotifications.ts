@@ -5,6 +5,22 @@ import type { WorkspaceActor } from "../types/workspace";
 
 type Notify = (input: NewNotification) => void;
 
+/**
+ * Appends `?task=<id>` to an existing page href (`/projects/:id/list`,
+ * `/tasks`, …) — the query-param convention every task-list-capable view
+ * (ProjectListTab/ProjectCalendarTab/ProjectTimelineTab/Tasks/Timeline)
+ * now reads on mount to auto-open that task's existing TaskDetailsDrawer,
+ * so a notification click lands on the specific task, not just its list.
+ * No new routes/pages — every one of those views already has its own
+ * `selectedTaskId` + TaskDetailsDrawer; this just gives it a real id to
+ * consume. Exported so useTaskCommentHandlers.ts's comment notification
+ * (the one other trigger that names a specific task) uses the exact same
+ * convention rather than inventing its own.
+ */
+export function withTaskParam(href: string, taskId: string): string {
+  return `${href}${href.includes("?") ? "&" : "?"}task=${taskId}`;
+}
+
 /* ============================================================
    Stage 4 (Real Notifications): every trigger below now targets a
    real recipient userId (`recipientId`, verified server-side to
@@ -17,39 +33,18 @@ type Notify = (input: NewNotification) => void;
    correctly at all.
 ============================================================ */
 
-export function notifyTaskAssigned(
-  addNotification: Notify,
-  params: {
-    taskTitle: string;
-    projectName: string;
-    /** Real assignee userId — the notification's recipient. */
-    assigneeId: string | null | undefined;
-    /** Real caller userId — assigning a task to yourself isn't worth notifying about. */
-    actorId: string | null | undefined;
-    actor: WorkspaceActor;
-    actionHref: string;
-  }
-): void {
-  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
-
-  if (!assigneeId || assigneeId === actorId) {
-    return;
-  }
-
-  addNotification({
-    type: "assignment",
-    title: "You were assigned a task",
-    message: `${actor.name} assigned you "${taskTitle}" in ${projectName}.`,
-    recipientId: assigneeId,
-    actionHref,
-  });
-}
-
-
+// notifyTaskAssigned was removed (Step 8 follow-up): task assignment now
+// notifies the new assignee from the backend itself (task.controller.ts's
+// updateTask, diffing the real previous assigneeId), which every task-save
+// call site below reaches through the same one PATCH — a client-side
+// trigger here would double-notify. Task completion has no backend
+// trigger yet, so notifyTaskCompleted stays exactly as it was.
 export function notifyTaskCompleted(
   addNotification: Notify,
   params: {
     taskTitle: string;
+    /** Real task id — appended to actionHref so the click opens this specific task, not just its list. */
+    taskId: string;
     projectName: string;
     /** Real assignee userId — the notification's recipient. */
     assigneeId: string | null | undefined;
@@ -59,7 +54,7 @@ export function notifyTaskCompleted(
     actionHref: string;
   }
 ): void {
-  const { taskTitle, projectName, assigneeId, actorId, actor, actionHref } = params;
+  const { taskTitle, taskId, projectName, assigneeId, actorId, actor, actionHref } = params;
 
   if (!assigneeId || assigneeId === actorId) {
     return;
@@ -70,7 +65,7 @@ export function notifyTaskCompleted(
     title: "Task completed",
     message: `${actor.name} marked "${taskTitle}" in ${projectName} as complete.`,
     recipientId: assigneeId,
-    actionHref,
+    actionHref: withTaskParam(actionHref, taskId),
   });
 }
 

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as milestoneService from "../services/milestone.service";
 import * as projectService from "../services/project.service";
 import type { MilestoneWriteInput } from "../services/milestone.service";
+import { logError } from "../lib/logger";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -62,6 +63,7 @@ export const createMilestone = async (req: Request, res: Response) => {
     const milestone = await milestoneService.createMilestone(projectId, title.trim(), parsedDueDate);
     return res.status(201).json(milestone);
   } catch (error) {
+    logError("milestone.createMilestone", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -79,6 +81,7 @@ export const listMilestones = async (req: Request, res: Response) => {
     const milestones = await milestoneService.listMilestonesForProject(projectId);
     return res.status(200).json(milestones);
   } catch (error) {
+    logError("milestone.listMilestones", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -125,6 +128,7 @@ export const updateMilestone = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Milestone not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("milestone.updateMilestone", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -146,6 +150,7 @@ export const deleteMilestone = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === "Milestone not found") {
       return res.status(404).json({ error: error.message });
     }
+    logError("milestone.deleteMilestone", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

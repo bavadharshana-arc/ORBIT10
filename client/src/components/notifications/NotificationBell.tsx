@@ -7,8 +7,14 @@ import { NotificationPanel } from "./NotificationPanel";
 
 interface PanelPosition {
   top: number;
-  right: number;
+  left: number;
+  width: number;
 }
+
+/** Preferred panel width — 420px, within the Notification Center redesign's requested 400–460px desktop range (the old dropdown was a fixed 380px `min(380px, calc(100vw - 24px))` CSS cap; this is the same idea, just wider and computed in JS so the clamp below can reason about the panel's actual on-screen size). */
+const PANEL_WIDTH = 420;
+/** Minimum breathing room kept between the panel and either viewport edge. */
+const VIEWPORT_MARGIN = 12;
 
 /**
  * Replaces the old static bell button in TopBar — same trigger size/shape,
@@ -26,6 +32,25 @@ interface PanelPosition {
  * computed from the trigger button's own bounding rect instead of CSS
  * inheritance, so it always paints above the whole app regardless of what
  * stacking contexts exist between TopBar and the page root.
+ *
+ * That same escape from CSS inheritance has a real cost, though: every
+ * Orbit design token (--text, --border, --blue, --card, etc.) is only
+ * ever *defined* inside `.orbit-root` (DashboardLayout's own wrapper —
+ * see globals.css's `.orbit-root { --blue: ...; ... }`), and a node
+ * portaled straight to document.body sits completely outside that
+ * subtree — a sibling lineage, not a descendant — so every var(--...) an
+ * element inside the portal references resolves to nothing. Text/
+ * background properties fail "gracefully" into a plausible-looking
+ * default (color inherits/defaults near-black, background defaults to
+ * transparent and just shows the page behind it), which is exactly why
+ * this went unnoticed — but SVG `stroke`'s unstyled fallback is `none`,
+ * genuinely invisible, which is what actually broke every notification
+ * icon and the delete button. The panel wrapper below carries its own
+ * `orbit-root` class for exactly this reason: `.orbit-root` is a class
+ * selector, not a singleton, so a second element can carry it and get
+ * its own valid copy of every token (dark mode included, since that
+ * override is keyed off `html[data-theme="dark"] .orbit-root`, and
+ * `<html>` is a real ancestor of everything, portal included).
  */
 export function NotificationBell() {
   const { unreadCount } = useNotificationContext();
@@ -36,9 +61,21 @@ export function NotificationBell() {
   function updatePosition() {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
+
     // 10px gap below the button, right-aligned to the button's right edge —
-    // same offsets the old absolutely-positioned version used.
-    setPosition({ top: rect.bottom + 10, right: window.innerWidth - rect.right });
+    // same offsets the old absolutely-positioned version used — but
+    // computed as a clamped `left` rather than a bare `right` offset.
+    // NotificationBell isn't the topbar's rightmost trigger (ProfileMenu
+    // sits to its right), so anchoring purely off the viewport's right
+    // edge pushes the panel's left edge off-screen on narrow viewports.
+    // Clamping both edges keeps it fully on-screen and left-aligned to
+    // the button once there's no longer room to hang it off the right.
+    const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2);
+    const left = Math.min(
+      Math.max(VIEWPORT_MARGIN, rect.right - width),
+      window.innerWidth - width - VIEWPORT_MARGIN
+    );
+    setPosition({ top: rect.bottom + 10, left, width });
   }
 
   function toggleOpen() {
@@ -61,6 +98,20 @@ export function NotificationBell() {
     };
   }, [isOpen]);
 
+  // Escape closes the panel, same as the click-outside backdrop below —
+  // a keyboard-only user has no other way to dismiss it, since the
+  // backdrop only responds to a pointer click.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
   return (
     <>
       <button
@@ -81,7 +132,8 @@ export function NotificationBell() {
           cursor: "pointer",
         }}
       >
-        <Bell size={17} strokeWidth={1.8} color="var(--text)" />
+        {/* style={{ stroke }}, not the color prop — lucide-react maps `color` to the SVG's raw `stroke` XML attribute, which never resolves var(--...) (see the doc comment above). This one's inside .orbit-root already, so scope isn't the issue here, just the same prop bug. */}
+        <Bell size={17} strokeWidth={1.8} style={{ stroke: "var(--text)" }} />
         {unreadCount > 0 && (
           <span
             aria-hidden="true"
@@ -114,13 +166,13 @@ export function NotificationBell() {
           <>
             <div onClick={() => setIsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
             <div
-              className="bg-card border-soft shadow-float-lg fade-in-static"
+              className="orbit-root bg-card border-soft shadow-float-lg fade-in"
               style={{
                 position: "fixed",
                 top: position.top,
-                right: position.right,
-                width: "min(380px, calc(100vw - 24px))",
-                borderRadius: 18,
+                left: position.left,
+                width: position.width,
+                borderRadius: 20,
                 overflow: "hidden",
                 zIndex: 1000,
               }}

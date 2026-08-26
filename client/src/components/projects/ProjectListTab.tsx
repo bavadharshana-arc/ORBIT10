@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 
 import { getDueGroup, type Priority, type Status, type Task } from "../../data/taskData";
@@ -11,7 +12,7 @@ import { useTaskCommentHandlers } from "../../hooks/useTaskCommentHandlers";
 import { loadMembers } from "../../data/teamData";
 import { resolveCurrentActor } from "../../data/workspaceData";
 import { useWorkspaceRole, isWorkspaceManager } from "../../hooks/useWorkspaceRole";
-import { notifyTaskAssigned, notifyTaskCompleted } from "../../data/systemNotifications";
+import { notifyTaskCompleted } from "../../data/systemNotifications";
 import { useAuth } from "../../context/AuthContext";
 import {
   TaskDetailsDrawer,
@@ -92,7 +93,15 @@ export function ProjectListTab() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("All");
   const [sortMode, setSortMode] = useState<SortMode>("due");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
+  const [searchParams] = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => searchParams.get("task"));
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
 
@@ -168,18 +177,10 @@ export function ProjectListTab() {
       assigneeId: values.assigneeKeys[0] ?? null,
     });
 
-    notifyTaskAssigned(addNotification, {
-      taskTitle: selectedTask.title,
-      projectName: selectedTask.project,
-      assigneeId: values.assigneeKeys[0],
-      actorId: user?.id,
-      actor: currentActor,
-      actionHref: `/projects/${project.id}/list`,
-    });
-
     if (changes.justCompleted) {
       notifyTaskCompleted(addNotification, {
         taskTitle: selectedTask.title,
+        taskId: selectedTask.id,
         projectName: selectedTask.project,
         assigneeId: values.assigneeKeys[0],
         actorId: user?.id,

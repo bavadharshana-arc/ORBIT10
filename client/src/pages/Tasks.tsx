@@ -7,19 +7,13 @@ import {
 import { useSearchParams } from "react-router-dom";
 
 import {
-  Search,
   Plus,
-  MoreHorizontal,
   CalendarDays,
-  MessageSquare,
-  CheckCircle2,
   Circle,
-  Clock3,
   X,
 } from "lucide-react";
 
 import type {
-  PillTone,
   TeamMember,
 } from "../types/dashboard";
 
@@ -36,12 +30,8 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 import {
-  notifyTaskAssigned,
   notifyTaskCompleted,
 } from "../data/systemNotifications";
-
-import { Pill } from "../components/ui/Pill";
-import { AvatarStack } from "../components/ui/AvatarStack";
 
 import { useTaskContext } from "../context/taskContextValue";
 import { useProjectContext } from "../context/projectContextValue";
@@ -66,6 +56,10 @@ import {
 
 import { InProgressCard } from "../components/tasks/InProgressCard";
 import { TaskSummaryCard } from "../components/tasks/TaskSummaryCard";
+import { UpcomingDeadlinesCard } from "../components/tasks/UpcomingDeadlinesCard";
+import { TaskGroup, getTaskAssignees } from "../components/tasks/TaskRow";
+import { TaskStatusTabs, type TaskStatusTab } from "../components/tasks/TaskStatusTabs";
+import { TaskFilters, type SortMode } from "../components/tasks/TaskFilters";
 
 /* ============================================================
    TYPES
@@ -85,14 +79,6 @@ type DueFilter =
   | "Upcoming"
   | "Overdue";
 
-interface TaskRowProps {
-  task: Task;
-  /** Editor+ on the task's project — gates the status-toggle button only; opening the row to view details stays available to everyone. */
-  canEdit: boolean;
-  onClick: () => void;
-  onToggleStatus: () => void;
-}
-
 /* ============================================================
    CONSTANTS
 ============================================================ */
@@ -103,6 +89,8 @@ const STATUS_OPTIONS: Status[] = [
   "Completed",
 ];
 
+// Order tabs are rendered in — "All" first so the page's existing
+// default (view every status at once) stays the landing state.
 const STATUS_FILTERS: StatusFilter[] = [
   "All",
   "To Do",
@@ -124,81 +112,15 @@ const DUE_FILTERS: DueFilter[] = [
   "Overdue",
 ];
 
-const PRIORITY_TONE: Record<
-  Priority,
-  PillTone
-> = {
-  Low: "surface",
-  Medium: "blue",
-  High: "dark",
+const PRIORITY_RANK: Record<Priority, number> = {
+  High: 0,
+  Medium: 1,
+  Low: 2,
 };
 
 /* ============================================================
    HELPERS
 ============================================================ */
-
-function getTaskAssignees(
-  task: Task
-): TeamMember[] {
-  if (
-    task.assignees &&
-    task.assignees.length > 0
-  ) {
-    return task.assignees;
-  }
-
-  if (task.assignee) {
-    return [task.assignee];
-  }
-
-  return [];
-}
-
-function getDueTone(
-  task: Task
-): PillTone {
-  const group =
-    getDueGroup(
-      task.dueDate
-    );
-
-  if (group === "Overdue") {
-    return "dark";
-  }
-
-  if (group === "Today") {
-    return "blue";
-  }
-
-  return "surface";
-}
-
-function getDueLabel(
-  task: Task
-): string {
-  if (task.dueDate) {
-    const date =
-      new Date(
-        `${task.dueDate}T00:00:00`
-      );
-
-    if (
-      !Number.isNaN(
-        date.getTime()
-      )
-    ) {
-      return date.toLocaleDateString(
-        "en-US",
-        {
-          month: "short",
-          day: "numeric",
-        }
-      );
-    }
-  }
-
-  return task.due || "No due date";
-}
 
 function parseDueFilter(
   value: string | null
@@ -272,343 +194,6 @@ function matchesDueFilter(
   }
 
   return true;
-}
-
-/* ============================================================
-   TASK ROW
-============================================================ */
-
-function TaskRow({
-  task,
-  canEdit,
-  onClick,
-  onToggleStatus,
-}: TaskRowProps) {
-  const assignees =
-    getTaskAssignees(task);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (
-          event.key ===
-            "Enter" ||
-          event.key === " "
-        ) {
-          event.preventDefault();
-          onClick();
-        }
-      }}
-      className="bg-card border-soft"
-      style={{
-        width: "100%",
-        borderRadius: 14,
-        border:
-          "1px solid #E4E8ED",
-        padding:
-          "14px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        cursor: "pointer",
-        textAlign: "left",
-        transition:
-          "box-shadow 160ms ease, transform 160ms ease",
-      }}
-    >
-      {/* STATUS ICON */}
-
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleStatus();
-        }}
-        disabled={!canEdit}
-        aria-label={
-          task.status ===
-          "Completed"
-            ? "Mark as not completed"
-            : "Mark as completed"
-        }
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 9,
-          border: "none",
-          padding: 0,
-          background:
-            task.status ===
-            "Completed"
-              ? "#EEF2F6"
-              : "#F7F8FA",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          cursor: canEdit ? "pointer" : "default",
-        }}
-      >
-        {task.status ===
-        "Completed" ? (
-          <CheckCircle2
-            size={16}
-            color="#20242B"
-          />
-        ) : task.status ===
-          "In Progress" ? (
-          <Clock3
-            size={16}
-            color="#667085"
-          />
-        ) : (
-          <Circle
-            size={16}
-            color="#98A2B3"
-          />
-        )}
-      </button>
-
-      {/* MAIN */}
-
-      <div
-        style={{
-          minWidth: 0,
-          flex: 1,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 5,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 650,
-              color:
-                "#20242B",
-              overflow:
-                "hidden",
-              textOverflow:
-                "ellipsis",
-              whiteSpace:
-                "nowrap",
-            }}
-          >
-            {task.title}
-          </span>
-
-          <Pill
-            tone={
-              PRIORITY_TONE[
-                task.priority
-              ]
-            }
-          >
-            {task.priority}
-          </Pill>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              color:
-                "#667085",
-              fontWeight: 600,
-            }}
-          >
-            {task.project}
-          </span>
-
-          <span
-            style={{
-              fontSize: 11,
-              color:
-                "#98A2B3",
-            }}
-          >
-            {task.description ||
-              "No description"}
-          </span>
-        </div>
-      </div>
-
-      {/* DUE */}
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          minWidth: 85,
-        }}
-      >
-        <CalendarDays
-          size={13}
-          color="#98A2B3"
-        />
-
-        <Pill
-          tone={getDueTone(task)}
-        >
-          {getDueLabel(task)}
-        </Pill>
-      </div>
-
-      {/* COMMENTS */}
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          color: "#98A2B3",
-          fontSize: 11,
-          minWidth: 40,
-        }}
-      >
-        <MessageSquare
-          size={13}
-        />
-
-        {task.comments?.length ??
-          0}
-      </div>
-
-      {/* ASSIGNEES */}
-
-      <AvatarStack
-        people={assignees}
-      />
-
-      <MoreHorizontal
-        size={17}
-        color="#98A2B3"
-      />
-    </div>
-  );
-}
-
-/* ============================================================
-   TASK GROUP
-============================================================ */
-
-interface TaskGroupProps {
-  title: string;
-  tasks: Task[];
-  canEditTask: (task: Task) => boolean;
-  onTaskClick: (
-    task: Task
-  ) => void;
-  onToggleStatus: (
-    task: Task
-  ) => void;
-}
-
-function TaskGroup({
-  title,
-  tasks,
-  canEditTask,
-  onTaskClick,
-  onToggleStatus,
-}: TaskGroupProps) {
-  if (tasks.length === 0) {
-    return null;
-  }
-
-  return (
-    <section
-      style={{
-        marginBottom: 26,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 10,
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 13,
-            fontWeight: 650,
-            color:
-              "#20242B",
-          }}
-        >
-          {title}
-        </h2>
-
-        <span
-          style={{
-            minWidth: 22,
-            height: 22,
-            padding:
-              "0 6px",
-            borderRadius: 999,
-            background:
-              "#EEF2F6",
-            color:
-              "#667085",
-            display: "flex",
-            alignItems:
-              "center",
-            justifyContent:
-              "center",
-            fontSize: 10.5,
-            fontWeight: 650,
-          }}
-        >
-          {tasks.length}
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection:
-            "column",
-          gap: 8,
-        }}
-      >
-        {tasks.map(
-          (task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              canEdit={canEditTask(task)}
-              onClick={() =>
-                onTaskClick(task)
-              }
-              onToggleStatus={() =>
-                onToggleStatus(
-                  task
-                )
-              }
-            />
-          )
-        )}
-      </div>
-    </section>
-  );
 }
 
 /* ============================================================
@@ -723,6 +308,8 @@ export default function Tasks() {
       )
   );
 
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+
   /*
     Deep-links like the Dashboard's "View today's tasks" button pass
     ?due=Today in the URL, and the MiniCalendar's day cells pass an
@@ -760,12 +347,19 @@ export default function Tasks() {
     );
   }
 
+  // A notification's actionHref may include `?task=<id>` (see
+  // systemNotifications.ts's withTaskParam) — hydrated once as the
+  // initial selection so the drawer opens on arrival. Deliberately a
+  // lazy useState initializer, not an effect: `selectedTask` below is a
+  // plain `.find()` re-evaluated every render, so it naturally resolves
+  // to the real task (and the drawer pops open) the moment `tasks`
+  // finishes loading, with no separate sync/retry logic needed.
   const [
     selectedTaskId,
     setSelectedTaskId,
   ] = useState<
     string | null
-  >(null);
+  >(() => searchParams.get("task"));
 
   const [
     isCreateDrawerOpen,
@@ -807,71 +401,89 @@ export default function Tasks() {
 
   /* ==========================================================
      FILTER TASKS
+
+     Two variants of the same predicate: `matchesNonStatusFilters` (used
+     for the tab counts, so a tab's count reflects the current
+     search/priority/date filters — e.g. searching "auth" shows how many
+     matching tasks are in each status) and `filteredTasks` (that plus
+     the active status tab, used for what's actually rendered). Neither
+     duplicates the other's logic — filteredTasks is just
+     matchesNonStatusFilters && matchesStatus.
   ========================================================== */
+
+  const matchesNonStatusFilters = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return (task: Task) => {
+      const matchesQuery =
+        normalizedQuery === "" ||
+        task.title.toLowerCase().includes(normalizedQuery) ||
+        task.project.toLowerCase().includes(normalizedQuery);
+
+      const matchesPriority =
+        priorityFilter === "All" || task.priority === priorityFilter;
+
+      const matchesDue = matchesDueFilter(task, dueFilter);
+
+      const matchesDate = !dateFilter || task.dueDate === dateFilter;
+
+      return matchesQuery && matchesPriority && matchesDue && matchesDate;
+    };
+  }, [query, priorityFilter, dueFilter, dateFilter]);
+
+  const tasksMatchingFilters = useMemo(
+    () => tasks.filter(matchesNonStatusFilters),
+    [tasks, matchesNonStatusFilters]
+  );
 
   const filteredTasks =
     useMemo(() => {
-      const normalizedQuery =
-        query
-          .trim()
-          .toLowerCase();
-
-      return tasks.filter(
-        (task) => {
-          const matchesQuery =
-            normalizedQuery ===
-              "" ||
-            task.title
-              .toLowerCase()
-              .includes(
-                normalizedQuery
-              ) ||
-            task.project
-              .toLowerCase()
-              .includes(
-                normalizedQuery
-              );
-
-          const matchesStatus =
-            statusFilter ===
-              "All" ||
-            task.status ===
-              statusFilter;
-
-          const matchesPriority =
-            priorityFilter ===
-              "All" ||
-            task.priority ===
-              priorityFilter;
-
-          const matchesDue =
-            matchesDueFilter(
-              task,
-              dueFilter
-            );
-
-          const matchesDate =
-            !dateFilter ||
-            task.dueDate ===
-              dateFilter;
-
-          return (
-            matchesQuery &&
-            matchesStatus &&
-            matchesPriority &&
-            matchesDue &&
-            matchesDate
-          );
-        }
+      return tasksMatchingFilters.filter(
+        (task) =>
+          statusFilter === "All" || task.status === statusFilter
       );
     }, [
-      tasks,
-      query,
+      tasksMatchingFilters,
       statusFilter,
-      priorityFilter,
-      dueFilter,
-      dateFilter,
     ]);
+
+  /* ==========================================================
+     SORT (display order only — never persisted, never re-fetched)
+  ========================================================== */
+
+  const sortedTasks = useMemo(() => {
+    if (sortMode === "default") {
+      return filteredTasks;
+    }
+
+    const copy = [...filteredTasks];
+
+    if (sortMode === "dueDate") {
+      copy.sort((a, b) => (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99"));
+    } else if (sortMode === "priority") {
+      copy.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+    } else if (sortMode === "title") {
+      copy.sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return copy;
+  }, [filteredTasks, sortMode]);
+
+  /* ==========================================================
+     STATUS TABS — counts respect search/priority/date filters,
+     same convention GitHub-style status tabs use.
+  ========================================================== */
+
+  const statusTabs = useMemo<TaskStatusTab<StatusFilter>[]>(() => {
+    return STATUS_FILTERS.map((status) => ({
+      key: status,
+      label: status,
+      count:
+        status === "All"
+          ? tasksMatchingFilters.length
+          : tasksMatchingFilters.filter((task) => task.status === status).length,
+    }));
+  }, [tasksMatchingFilters]);
 
   /* ==========================================================
      GROUP TASKS
@@ -883,7 +495,7 @@ export default function Tasks() {
         {
           title: "To Do",
           tasks:
-            filteredTasks.filter(
+            sortedTasks.filter(
               (task) =>
                 task.status ===
                 "To Do"
@@ -893,7 +505,7 @@ export default function Tasks() {
           title:
             "In Progress",
           tasks:
-            filteredTasks.filter(
+            sortedTasks.filter(
               (task) =>
                 task.status ===
                 "In Progress"
@@ -903,7 +515,7 @@ export default function Tasks() {
           title:
             "Completed",
           tasks:
-            filteredTasks.filter(
+            sortedTasks.filter(
               (task) =>
                 task.status ===
                 "Completed"
@@ -911,7 +523,7 @@ export default function Tasks() {
         },
       ];
     }, [
-      filteredTasks,
+      sortedTasks,
     ]);
 
   /* ==========================================================
@@ -1053,7 +665,7 @@ export default function Tasks() {
           selectedTask
         )
           .map(
-            (member) =>
+            (member: TeamMember) =>
               ASSIGNEE_OPTIONS.find(
                 (option) =>
                   option.member
@@ -1185,23 +797,12 @@ export default function Tasks() {
       assigneeId: values.assigneeKeys[0] ?? null,
     });
 
-    notifyTaskAssigned(
-      addNotification,
-      {
-        taskTitle: selectedTask.title,
-        projectName: selectedTask.project,
-        assigneeId: values.assigneeKeys[0],
-        actorId: user?.id,
-        actor: currentActor,
-        actionHref: "/tasks",
-      }
-    );
-
     if (changes.justCompleted) {
       notifyTaskCompleted(
         addNotification,
         {
           taskTitle: selectedTask.title,
+          taskId: selectedTask.id,
           projectName: selectedTask.project,
           assigneeId: values.assigneeKeys[0],
           actorId: user?.id,
@@ -1289,6 +890,12 @@ export default function Tasks() {
      UI
   ========================================================== */
 
+  // When a single status tab is active, filteredTasks/taskGroups already
+  // only contains that one status — repeating its name as a section
+  // header right under the (already-labeled) active tab is redundant, so
+  // only the "All" tab renders per-group headers.
+  const showGroupHeaders = statusFilter === "All";
+
   return (
     <div
       className="fade-in"
@@ -1313,15 +920,10 @@ export default function Tasks() {
       ====================================================== */}
 
       <div
+        className="flex flex-wrap items-start justify-between"
         style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent:
-            "space-between",
           gap: 20,
-          marginBottom: 24,
-          flexWrap:
-            "wrap",
+          marginBottom: 22,
         }}
       >
         <div>
@@ -1331,8 +933,7 @@ export default function Tasks() {
               margin: 0,
               fontSize: 26,
               fontWeight: 600,
-              color:
-                "#20242B",
+              color: "var(--text)",
             }}
           >
             Tasks
@@ -1340,11 +941,9 @@ export default function Tasks() {
 
           <p
             style={{
-              margin:
-                "6px 0 0",
+              margin: "6px 0 0",
               fontSize: 12.5,
-              color:
-                "#667085",
+              color: "var(--text-2)",
             }}
           >
             Manage and track all
@@ -1360,23 +959,18 @@ export default function Tasks() {
                 true
               )
             }
+            className="flex items-center hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue-dark)]"
             style={{
-              background:
-                "#20242B",
-              color:
-                "#F7F8FA",
+              background: "var(--text)",
+              color: "var(--surface)",
               border: "none",
               borderRadius: 12,
-              padding:
-                "10px 15px",
+              padding: "10px 16px",
               fontSize: 12.5,
               fontWeight: 600,
-              cursor:
-                "pointer",
-              display: "flex",
-              alignItems:
-                "center",
+              cursor: "pointer",
               gap: 7,
+              transition: "opacity 200ms ease",
             }}
           >
             <Plus size={14} />
@@ -1386,141 +980,37 @@ export default function Tasks() {
       </div>
 
       {/* ======================================================
-          TOOLBAR
+          STATUS TABS
       ====================================================== */}
 
-      <div
-        className="bg-card border-soft"
-        style={{
-          display: "flex",
-          alignItems:
-            "center",
-          gap: 10,
-          padding: 10,
-          borderRadius: 14,
-          marginBottom: 22,
-          flexWrap:
-            "wrap",
-        }}
-      >
-        {/* SEARCH */}
+      <TaskStatusTabs
+        tabs={statusTabs}
+        active={statusFilter}
+        onChange={setStatusFilter}
+      />
 
-        <div
-          style={{
-            display: "flex",
-            alignItems:
-              "center",
-            gap: 8,
-            flex: 1,
-            minWidth: 180,
-            padding:
-              "8px 10px",
-          }}
-        >
-          <Search
-            size={15}
-            color="#98A2B3"
-          />
+      {/* ======================================================
+          FILTERS TOOLBAR
+      ====================================================== */}
 
-          <input
-            value={query}
-            onChange={(event) =>
-              setQuery(
-                event.target.value
-              )
-            }
-            placeholder="Search tasks..."
-            style={{
-              border: "none",
-              outline: "none",
-              background:
-                "transparent",
-              fontSize: 12.5,
-              color:
-                "#20242B",
-              width: "100%",
-            }}
-          />
-        </div>
-
-        {/* STATUS */}
-
-        <select
-          value={statusFilter}
-          onChange={(event) =>
-            setStatusFilter(
-              event.target
-                .value as StatusFilter
-            )
-          }
-          style={filterStyle}
-        >
-          {STATUS_FILTERS.map(
-            (option) => (
-              <option
-                key={option}
-                value={option}
-              >
-                {option}
-              </option>
-            )
-          )}
-        </select>
-
-        {/* PRIORITY */}
-
-        <select
-          value={priorityFilter}
-          onChange={(event) =>
-            setPriorityFilter(
-              event.target
-                .value as PriorityFilter
-            )
-          }
-          style={filterStyle}
-        >
-          {PRIORITY_FILTERS.map(
-            (option) => (
-              <option
-                key={option}
-                value={option}
-              >
-                {option ===
-                "All"
-                  ? "All priorities"
-                  : option}
-              </option>
-            )
-          )}
-        </select>
-
-        {/* DUE */}
-
-        <select
-          value={dueFilter}
-          onChange={(event) =>
-            setDueFilter(
-              event.target
-                .value as DueFilter
-            )
-          }
-          style={filterStyle}
-        >
-          {DUE_FILTERS.map(
-            (option) => (
-              <option
-                key={option}
-                value={option}
-              >
-                {option ===
-                "All"
-                  ? "All dates"
-                  : option}
-              </option>
-            )
-          )}
-        </select>
-      </div>
+      <TaskFilters
+        query={query}
+        onQueryChange={setQuery}
+        priorityFilter={priorityFilter}
+        priorityOptions={PRIORITY_FILTERS.map((option) => ({
+          value: option,
+          label: option === "All" ? "All priorities" : option,
+        }))}
+        onPriorityChange={(value) => setPriorityFilter(value as PriorityFilter)}
+        dueFilter={dueFilter}
+        dueOptions={DUE_FILTERS.map((option) => ({
+          value: option,
+          label: option === "All" ? "All dates" : option,
+        }))}
+        onDueChange={(value) => setDueFilter(value as DueFilter)}
+        sortMode={sortMode}
+        onSortChange={setSortMode}
+      />
 
       {/* ======================================================
           ACTIVE DATE FILTER
@@ -1540,18 +1030,18 @@ export default function Tasks() {
             className="flex items-center"
             style={{
               gap: 6,
-              border: "1px solid #E4E8ED",
-              background: "#F7F8FA",
+              border: "1px solid var(--border)",
+              background: "var(--surface-2)",
               borderRadius: 999,
               padding: "6px 6px 6px 12px",
               fontSize: 11.5,
               fontWeight: 600,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             <CalendarDays
               size={13}
-              color="#98A2B3"
+              color="var(--text-3)"
             />
 
             Due {formatDateFilterLabel(dateFilter)}
@@ -1560,9 +1050,10 @@ export default function Tasks() {
               type="button"
               onClick={clearDateFilter}
               aria-label="Clear date filter"
+              className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--blue-dark)]"
               style={{
                 border: "none",
-                background: "#EEF2F6",
+                background: "var(--card)",
                 borderRadius: "50%",
                 width: 18,
                 height: 18,
@@ -1575,7 +1066,7 @@ export default function Tasks() {
             >
               <X
                 size={11}
-                color="#667085"
+                color="var(--text-2)"
               />
             </button>
           </div>
@@ -1594,26 +1085,22 @@ export default function Tasks() {
             minHeight: 240,
             borderRadius: 16,
             display: "flex",
-            flexDirection:
-              "column",
-            alignItems:
-              "center",
-            justifyContent:
-              "center",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
             gap: 10,
           }}
         >
           <Circle
             size={28}
-            color="#98A2B3"
+            color="var(--text-3)"
           />
 
           <span
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color:
-                "#667085",
+              color: "var(--text-2)",
             }}
           >
             No tasks found
@@ -1622,8 +1109,7 @@ export default function Tasks() {
           <span
             style={{
               fontSize: 11.5,
-              color:
-                "#98A2B3",
+              color: "var(--text-3)",
             }}
           >
             Try changing your
@@ -1641,6 +1127,7 @@ export default function Tasks() {
               tasks={
                 group.tasks
               }
+              showHeader={showGroupHeaders}
               canEditTask={canEditTask}
               onTaskClick={(
                 task
@@ -1656,6 +1143,7 @@ export default function Tasks() {
                   task.id
                 )
               }
+              onDeleteTask={(task) => handleDeleteTask(task.id)}
             />
           )
         )
@@ -1664,12 +1152,18 @@ export default function Tasks() {
       </div>
 
       {/* ======================================================
-          PRODUCTIVITY WIDGETS (right sidebar)
+          TASK ANALYTICS (right sidebar)
       ====================================================== */}
 
       <div className="w-full lg:w-70 lg:shrink-0">
         <InProgressCard />
         <TaskSummaryCard />
+        {/* TaskSummaryCard/InProgressCard self-space via their own
+            marginTop, not a wrapper gap — matching that convention here
+            rather than introducing a second spacing mechanism. */}
+        <div style={{ marginTop: 16 }}>
+          <UpcomingDeadlinesCard />
+        </div>
       </div>
 
       </div>
@@ -1751,26 +1245,3 @@ export default function Tasks() {
     </div>
   );
 }
-
-/* ============================================================
-   STYLES
-============================================================ */
-
-const filterStyle = {
-  appearance:
-    "none" as const,
-  border:
-    "1px solid #E4E8ED",
-  borderRadius: 10,
-  background:
-    "#F7F8FA",
-  padding:
-    "8px 12px",
-  fontSize: 11.5,
-  fontWeight: 600,
-  color:
-    "#20242B",
-  outline: "none",
-  cursor:
-    "pointer",
-};

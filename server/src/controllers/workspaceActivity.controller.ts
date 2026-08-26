@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as workspaceActivityService from "../services/workspaceActivity.service";
 import * as workspaceService from "../services/workspace.service";
+import { logError } from "../lib/logger";
 
 export const createActivityEvent = async (req: Request, res: Response) => {
   const workspaceId = req.params.id as string;
@@ -33,6 +34,7 @@ export const createActivityEvent = async (req: Request, res: Response) => {
     );
     return res.status(201).json(event);
   } catch (error) {
+    logError("workspaceActivity.createActivityEvent", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -44,6 +46,7 @@ export const listActivity = async (req: Request, res: Response) => {
     const events = await workspaceActivityService.listActivityForWorkspace(workspaceId);
     return res.status(200).json(events);
   } catch (error) {
+    logError("workspaceActivity.listActivity", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

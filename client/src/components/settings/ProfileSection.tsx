@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { User } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { AVATAR_COLOR_OPTIONS } from "../../data/settingsData";
 import { getInitials } from "../../data/teamData";
 import { ApiError } from "../../lib/api";
 import { getMyProfile, updateMyProfile, type ProfileUpdate, type UserProfile } from "../../lib/userApi";
 import { Avatar } from "../ui/Avatar";
-import { Field, SavedBadge, SectionCard } from "./shared";
-import { inputStyle, primaryButtonStyle, secondaryButtonStyle, textareaStyle } from "./styles";
+import { SavedBadge, SettingsGroup, SettingsRow, SettingsSection } from "./shared";
+import { inputStyle, settingsPrimaryButtonStyle, settingsSecondaryButtonStyle, textareaStyle } from "./styles";
 import { useSavedFlash } from "./useSavedFlash";
 
 /* ============================================================
@@ -87,17 +87,17 @@ export function ProfileSection() {
 
   if (loading) {
     return (
-      <SectionCard icon={User} title="Profile" description="Your personal details and how you appear across Orbit.">
-        <p style={{ margin: 0, fontSize: 12.5, color: "#98A2B3" }}>Loading your profile…</p>
-      </SectionCard>
+      <SettingsSection title="Profile" description="Your personal details and how you appear across Orbit.">
+        <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-3)" }}>Loading your profile…</p>
+      </SettingsSection>
     );
   }
 
   if (loadError || !profile || !form) {
     return (
-      <SectionCard icon={User} title="Profile" description="Your personal details and how you appear across Orbit.">
+      <SettingsSection title="Profile" description="Your personal details and how you appear across Orbit.">
         <p style={{ margin: 0, fontSize: 12.5, color: "#B3564B" }}>{loadError ?? "Couldn't load your profile."}</p>
-      </SectionCard>
+      </SettingsSection>
     );
   }
 
@@ -172,103 +172,151 @@ export function ProfileSection() {
   }
 
   return (
-    <SectionCard icon={User} title="Profile" description="Your personal details and how you appear across Orbit.">
-      {/* AVATAR */}
-      <div className="flex items-center flex-wrap" style={{ gap: 16, marginBottom: 22 }}>
-        <Avatar initials={getInitials(form.name || "?")} bg={form.avatarBg} fg={form.avatarFg} size={56} />
+    <SettingsSection title="Profile" description="Your personal details and how you appear across Orbit.">
+      {/* IDENTITY — compact avatar/name/email strip, not its own boxed card */}
+      <div className="flex items-center flex-wrap" style={{ gap: 16 }}>
+        <Avatar initials={getInitials(form.name || "?")} bg={form.avatarBg} fg={form.avatarFg} size={60} />
+        <div style={{ minWidth: 0 }}>
+          <p className="font-display" style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "var(--text)" }}>
+            {form.name || "Unnamed"}
+          </p>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-3)" }}>
+            {form.email}
+            {form.jobTitle ? ` · ${form.jobTitle}` : ""}
+          </p>
+        </div>
+      </div>
 
-        <div>
-          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 600, color: "#667085" }}>Avatar color</p>
-          <div className="flex items-center" style={{ gap: 7 }}>
-            {AVATAR_COLOR_OPTIONS.map((option) => {
+      <SettingsGroup>
+        <SettingsRow label="Avatar color" description="Shown across Orbit wherever your initials appear.">
+          <div className="flex items-center" style={{ gap: 8, justifyContent: "flex-end" }}>
+            {AVATAR_COLOR_OPTIONS.map((option, index) => {
               const selected = option.bg === form.avatarBg;
 
               return (
                 <button
                   key={option.bg}
                   type="button"
-                  aria-label={`Use ${option.bg} avatar color`}
+                  aria-label={`Avatar color ${index + 1}`}
+                  aria-pressed={selected}
                   onClick={() => {
                     set("avatarBg", option.bg);
                     set("avatarFg", option.fg);
                   }}
+                  className="focus-ring settings-swatch flex items-center justify-center"
                   style={{
-                    width: 24,
-                    height: 24,
+                    width: 22,
+                    height: 22,
                     borderRadius: "50%",
                     background: option.bg,
-                    border: selected ? "2px solid #20242B" : "2px solid transparent",
-                    boxShadow: selected ? "none" : "0 0 0 1px #E4E8ED",
+                    border: selected ? "2px solid var(--text)" : "2px solid transparent",
+                    boxShadow: selected ? "none" : "0 0 0 1px var(--border)",
                     cursor: "pointer",
                     padding: 0,
+                    flexShrink: 0,
                   }}
-                />
+                >
+                  {selected && <Check size={11} strokeWidth={3} color={option.fg} />}
+                </button>
               );
             })}
           </div>
-        </div>
-      </div>
+        </SettingsRow>
 
-      {/* FIELDS */}
-      <div className="flex flex-col" style={{ gap: 16 }}>
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
-          <Field label="Full name">
-            <input value={form.name} onChange={(event) => set("name", event.target.value)} style={inputStyle} />
-          </Field>
+        <SettingsRow label="Full name" description="Your name shown across Orbit.">
+          <input
+            value={form.name}
+            onChange={(event) => set("name", event.target.value)}
+            className="focus-ring settings-input"
+            style={inputStyle}
+          />
+        </SettingsRow>
 
-          <Field label="Email">
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => set("email", event.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-        </div>
+        <SettingsRow label="Email" description="Your account email.">
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) => set("email", event.target.value)}
+            className="focus-ring settings-input"
+            style={inputStyle}
+          />
+        </SettingsRow>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 14 }}>
-          <Field label="Job title">
-            <input value={form.jobTitle} onChange={(event) => set("jobTitle", event.target.value)} style={inputStyle} />
-          </Field>
+        <SettingsRow label="Job title" description="Shown on your profile card.">
+          <input
+            value={form.jobTitle}
+            onChange={(event) => set("jobTitle", event.target.value)}
+            placeholder="Add a job title"
+            className="focus-ring settings-input"
+            style={inputStyle}
+          />
+        </SettingsRow>
 
-          <Field label="Phone">
-            <input value={form.phone} onChange={(event) => set("phone", event.target.value)} style={inputStyle} />
-          </Field>
-        </div>
+        <SettingsRow label="Phone" description="Optional — visible to your workspace.">
+          <input
+            value={form.phone}
+            onChange={(event) => set("phone", event.target.value)}
+            placeholder="Add a phone number"
+            className="focus-ring settings-input"
+            style={inputStyle}
+          />
+        </SettingsRow>
 
-        <Field label="Location">
-          <input value={form.location} onChange={(event) => set("location", event.target.value)} style={inputStyle} />
-        </Field>
+        <SettingsRow label="Location" description="Optional — city or region.">
+          <input
+            value={form.location}
+            onChange={(event) => set("location", event.target.value)}
+            placeholder="Add your location"
+            className="focus-ring settings-input"
+            style={inputStyle}
+          />
+        </SettingsRow>
 
-        <Field label="Bio" hint="A short line shown on your profile card.">
-          <textarea value={form.bio} onChange={(event) => set("bio", event.target.value)} style={textareaStyle} />
-        </Field>
-      </div>
+        <SettingsRow label="Bio" description="A short line shown on your profile card." stack>
+          <textarea
+            value={form.bio}
+            onChange={(event) => set("bio", event.target.value)}
+            placeholder="Write a short bio"
+            className="focus-ring settings-input"
+            style={textareaStyle}
+          />
+        </SettingsRow>
+      </SettingsGroup>
 
-      {saveError && (
-        <p style={{ margin: "14px 0 0", fontSize: 11.5, color: "#B3564B" }}>{saveError}</p>
-      )}
+      {saveError && <p style={{ margin: 0, fontSize: 11.5, color: "#B3564B" }}>{saveError}</p>}
 
-      {/* FOOTER */}
-      <div className="flex items-center" style={{ gap: 10, marginTop: 20 }}>
+      <div className="flex items-center" style={{ gap: 10 }}>
         <button
           type="button"
           onClick={handleSave}
           disabled={saving || !isDirty}
-          className="lift"
-          style={{ ...primaryButtonStyle, opacity: saving || !isDirty ? 0.6 : 1, cursor: saving || !isDirty ? "default" : "pointer" }}
+          className="settings-btn settings-btn-primary focus-ring"
+          style={{
+            ...settingsPrimaryButtonStyle,
+            cursor: saving || !isDirty ? "default" : "pointer",
+            // Only set inline when actually disabled — an inline `opacity`
+            // present at rest would always beat .settings-btn-primary:hover's
+            // CSS rule (inline declarations win the cascade regardless of
+            // :hover), silently killing the hover feedback while enabled.
+            ...(saving || !isDirty ? { opacity: 0.5 } : {}),
+          }}
         >
           {saving ? "Saving…" : "Save changes"}
         </button>
 
         {isDirty && !saving && (
-          <button type="button" onClick={handleDiscard} style={secondaryButtonStyle}>
+          <button
+            type="button"
+            onClick={handleDiscard}
+            className="settings-btn settings-btn-secondary focus-ring"
+            style={settingsSecondaryButtonStyle}
+          >
             Discard
           </button>
         )}
 
         <SavedBadge visible={saved} />
       </div>
-    </SectionCard>
+    </SettingsSection>
   );
 }

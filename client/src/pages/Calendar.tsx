@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 
 import { useTaskContext } from "../context/taskContextValue";
+import { useWorkspace } from "../context/workspaceContextValue";
+import { listWorkspaceMembers } from "../lib/workspaceApi";
+import { getInitials } from "../data/teamData";
 
 // ============================================================================
 // Types
@@ -115,154 +118,6 @@ function getMonthMatrix(year: number, month: number): Date[][] {
     weeks.push(days.slice(i, i + 7));
   }
   return weeks;
-}
-
-// ============================================================================
-// Mock data
-// ============================================================================
-// Dates are generated relative to "today" (at load time) so the page always
-// reads as populated and realistic, whenever it's actually opened.
-
-const PEOPLE: Person[] = [
-  { id: "p1", name: "Eddie Mutisya", email: "mutisya@orbit.com", initials: "EM" },
-  { id: "p2", name: "Alex Otieno", email: "alex@orbit.com", initials: "AO" },
-  { id: "p3", name: "Antony Kelvin", email: "antony@orbit.com", initials: "AK" },
-  { id: "p4", name: "Priya Nair", email: "priya@orbit.com", initials: "PN" },
-];
-
-function buildMockEvents(): CalendarEvent[] {
-  const today = new Date();
-  const at = (offsetDays: number) => toDateKey(addDays(today, offsetDays));
-
-  return [
-    {
-      id: "evt-1",
-      title: "Design review",
-      date: at(0),
-      type: "meeting",
-      time: "10:30 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-2",
-      title: "API deadline",
-      date: at(0),
-      type: "deadline",
-      time: "5:00 PM",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-3",
-      title: "Sprint planning",
-      date: at(1),
-      type: "meeting",
-      time: "9:00 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-4",
-      title: "Write onboarding copy",
-      date: at(1),
-      type: "task",
-      time: "1:00 PM",
-      project: "Growth",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-5",
-      title: "Beta launch",
-      date: at(3),
-      type: "milestone",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-6",
-      title: "1:1 with manager",
-      date: at(4),
-      time: "11:00 AM",
-      type: "meeting",
-      assigneeId: "p3",
-    },
-    {
-      id: "evt-7",
-      title: "QA pass on Kanban",
-      date: at(5),
-      type: "task",
-      time: "2:00 PM",
-      project: "Orbit Redesign",
-      assigneeId: "p3",
-    },
-    {
-      id: "evt-8",
-      title: "Client feedback due",
-      date: at(5),
-      type: "deadline",
-      time: "6:00 PM",
-      project: "Client Portal",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-9",
-      title: "Team standup",
-      date: at(-1),
-      type: "meeting",
-      time: "9:15 AM",
-    },
-    {
-      id: "evt-10",
-      title: "Analytics dashboard v1",
-      date: at(-2),
-      type: "milestone",
-      project: "Core API",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-11",
-      title: "Prep quarterly review",
-      date: at(8),
-      type: "task",
-      time: "3:00 PM",
-      project: "Leadership",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-12",
-      title: "Security audit deadline",
-      date: at(10),
-      type: "deadline",
-      time: "5:00 PM",
-      project: "Core API",
-      assigneeId: "p2",
-    },
-    {
-      id: "evt-13",
-      title: "Design system sync",
-      date: at(12),
-      type: "meeting",
-      time: "10:00 AM",
-      project: "Orbit Redesign",
-      assigneeId: "p1",
-    },
-    {
-      id: "evt-14",
-      title: "Marketing site launch",
-      date: at(14),
-      type: "milestone",
-      project: "Growth",
-      assigneeId: "p4",
-    },
-    {
-      id: "evt-15",
-      title: "Team offsite",
-      date: at(15),
-      type: "meeting",
-      project: "Team",
-    },
-  ];
 }
 
 // ============================================================================
@@ -473,6 +328,75 @@ function MiniCalendar({
 // Left sidebar — Selected day panel
 // ============================================================================
 
+/** The three event types the Selected Day summary chips count — milestones
+ * are deliberately left out of the chip row (the reference only asks for
+ * Task/Meeting/Deadline) but still render normally in the list below. */
+const SUMMARY_TYPES: readonly EventType[] = ["task", "meeting", "deadline"];
+
+/** Same literal per-type accents as EVENT_META's own `dot` background
+ * colors above (task #8EA7BF, meeting #AFC5DA, deadline #667085) — just
+ * applied as an icon stroke color instead of a filled dot, so the chips
+ * carry no colors that don't already exist elsewhere on this page. */
+const SUMMARY_ICON_COLOR: Record<EventType, string> = {
+  task: "text-[#8EA7BF]",
+  meeting: "text-[#AFC5DA]",
+  deadline: "text-[#667085]",
+  milestone: "text-[#20242B]",
+};
+
+/** "3 Tasks" / "1 Meeting" / "0 Deadlines" — EVENT_META's label is always
+ * singular, so pluralize here rather than hardcoding each chip's text. */
+function formatSummaryLabel(type: EventType, count: number): string {
+  const label = EVENT_META[type].label;
+  return `${count} ${count === 1 ? label : `${label}s`}`;
+}
+
+function SelectedDaySummary({ events }: { events: CalendarEvent[] }) {
+  // Counts come straight from the same `events` (selectedDayEvents) the
+  // list below already renders — same source, same date-matching logic
+  // (eventsByDate in Calendar()), so this never drifts from what's
+  // actually shown, and updates automatically whenever the selected day
+  // or the underlying task/event data changes.
+  const counts = useMemo(() => {
+    const tally: Record<EventType, number> = { task: 0, meeting: 0, deadline: 0, milestone: 0 };
+    for (const event of events) {
+      tally[event.type] += 1;
+    }
+    return tally;
+  }, [events]);
+
+  return (
+    // flex-nowrap + items-center: always one straight horizontal row, on
+    // the 260px desktop sidebar (the tightest case — the panel is full
+    // width everywhere below the lg breakpoint, so this is the narrowest
+    // this row is ever actually laid out at) and everywhere else. Sized
+    // with real margin to spare at that width (see the size math in the
+    // PR notes) rather than right at the edge, and each chip is still a
+    // shrink/min-w-0 flex item with a truncating label as a last-resort
+    // safety net — if space ever gets *truly* too tight (an extreme
+    // zoomed-in or squeezed viewport) a chip's text clips with an
+    // ellipsis instead of wrapping to a new line or overflowing the panel.
+    <div className="mt-2.5 flex flex-nowrap items-center gap-0.5">
+      {SUMMARY_TYPES.map((type) => {
+        const meta = EVENT_META[type];
+        const Icon = meta.icon;
+        const count = counts[type];
+        return (
+          <div
+            key={type}
+            className="flex min-w-0 shrink items-center gap-1 rounded-lg border border-soft bg-surface px-1 py-1"
+          >
+            <Icon className={`h-2.5 w-2.5 shrink-0 ${SUMMARY_ICON_COLOR[type]}`} strokeWidth={2.25} />
+            <span className="min-w-0 truncate whitespace-nowrap text-[10px] font-medium text-[#667085]">
+              {formatSummaryLabel(type, count)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SelectedDayPanel({
   date,
   events,
@@ -492,7 +416,9 @@ function SelectedDayPanel({
         {formatLongDate(date)}
       </p>
 
-      <div className="mt-3 flex flex-col gap-2">
+      <SelectedDaySummary events={events} />
+
+      <div className="mt-3 flex flex-col gap-2 border-t border-soft pt-3">
         {events.length === 0 ? (
           <p className="rounded-lg border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
             No events scheduled for this day.
@@ -816,9 +742,58 @@ function CalendarGrid({
 
 export default function Calendar() {
   const today = useMemo(() => new Date(), []);
-  const mockEvents = useMemo(() => buildMockEvents(), []);
 
   const { tasks } = useTaskContext();
+  const { currentWorkspaceId } = useWorkspace();
+
+  // People sidebar — real, workspace-scoped members (same
+  // listWorkspaceMembers call Team.tsx already uses as its primary data
+  // source), replacing what used to be a hardcoded PEOPLE array shown to
+  // every account regardless of workspace. Re-fetches whenever the active
+  // workspace changes; a workspace with no other members just renders
+  // PeopleList's existing "No people found." empty state.
+  const [people, setPeople] = useState<Person[]>([]);
+  // Tracks the workspace id `people` was last computed for, so switching to
+  // "no active workspace" clears it once, during render (React's
+  // documented pattern for "adjust state when a prop changes" — mirrors
+  // WorkspaceSection.tsx's syncedWorkspaceId use of the same pattern)
+  // rather than via a synchronous setState in the effect body below, which
+  // is exactly what react-hooks/set-state-in-effect flags.
+  const [peopleWorkspaceId, setPeopleWorkspaceId] = useState(currentWorkspaceId);
+
+  if (currentWorkspaceId !== peopleWorkspaceId) {
+    setPeopleWorkspaceId(currentWorkspaceId);
+    if (!currentWorkspaceId) setPeople([]);
+  }
+
+  useEffect(() => {
+    if (!currentWorkspaceId) return;
+
+    let cancelled = false;
+
+    listWorkspaceMembers(currentWorkspaceId)
+      .then((members) => {
+        if (cancelled) return;
+        setPeople(
+          members.map((member) => {
+            const name = member.user.name ?? member.user.email;
+            return {
+              id: member.user.id,
+              name,
+              email: member.user.email,
+              initials: getInitials(name),
+            };
+          }),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspaceId]);
 
   // Tasks with a due date, mapped into the same CalendarEvent shape used
   // by the rest of the calendar so they render through the existing
@@ -862,19 +837,13 @@ export default function Calendar() {
       event.project?.toLowerCase().includes(query);
 
     // Real tasks have no `assigneeId` — there's no real link between
-    // TaskContext's assignees and this page's mock People list — so the
-    // People filter (which only mock events can honestly satisfy) is
-    // scoped to mock events only. Otherwise selecting any person here
-    // would wipe every real task off the calendar, since none of them
-    // could ever match a mock person id.
-    const matchesPerson = (event: CalendarEvent) =>
-      !selectedPersonId || event.assigneeId === selectedPersonId;
-
-    return [
-      ...mockEvents.filter((event) => matchesQuery(event) && matchesPerson(event)),
-      ...taskEvents.filter((event) => matchesQuery(event)),
-    ];
-  }, [mockEvents, taskEvents, searchQuery, selectedPersonId]);
+    // TaskContext's assignees and this page's People sidebar roster — so
+    // the People filter has nothing real to narrow by. selectedPersonId
+    // is left wired up (My Schedule / selection highlighting still work)
+    // but doesn't gate these events, same as it never gated real tasks
+    // before this fix either.
+    return taskEvents.filter((event) => matchesQuery(event));
+  }, [taskEvents, searchQuery]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -942,7 +911,7 @@ export default function Calendar() {
         />
         <SelectedDayPanel date={selectedDate} events={selectedDayEvents} />
         <PeopleList
-          people={PEOPLE}
+          people={people}
           searchQuery={peopleSearchQuery}
           selectedPersonId={selectedPersonId}
           onSearchChange={setPeopleSearchQuery}

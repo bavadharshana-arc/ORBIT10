@@ -2,14 +2,18 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Plus, FolderOpen } from "lucide-react";
 
-import type { Project } from "../types/dashboard";
-import { getDueGroup } from "../data/taskData";
-import { Pill } from "../components/ui/Pill";
+import type { Project, TeamMember } from "../types/dashboard";
+import { getDueGroup, getUpcomingTasks } from "../data/taskData";
 import { AvatarStack } from "../components/ui/AvatarStack";
-import { ProgressRing } from "../components/ui/ProgressRing";
 import { useProjectContext } from "../context/projectContextValue";
 import { useWorkspace } from "../context/workspaceContextValue";
-import { formatProjectDue, generateProjectId, getProjectStatus, PROJECT_STATUS_META } from "../data/projectData";
+import {
+  formatProjectDue,
+  generateProjectId,
+  getProjectStatus,
+  getUpcomingProjects,
+  PROJECT_STATUS_META,
+} from "../data/projectData";
 import { useTaskContext } from "../context/taskContextValue";
 import { ApiError } from "../lib/api";
 import {
@@ -19,8 +23,12 @@ import {
 } from "../lib/projectApi";
 import { CreateProjectDrawer, type CreateProjectValues } from "../components/CreateProjectDrawer";
 import { ProjectActionsMenu } from "../components/projects/ProjectActionsMenu";
+import { resolveProjectIcon, softTint } from "../components/projects/projectCardMeta";
+import { ProjectOverviewCard } from "../components/projects/ProjectOverviewCard";
+import { UpcomingDeadlinesCard, type DeadlineItem } from "../components/projects/UpcomingDeadlinesCard";
+import { TasksByStatusCard } from "../components/projects/TasksByStatusCard";
 import { ConfirmDangerModal } from "../components/settings/ConfirmDangerModal";
-import { loadMembers } from "../data/teamData";
+import { loadMembers, mapProjectMemberToTeamMember } from "../data/teamData";
 import { resolveCurrentActor } from "../data/workspaceData";
 import { notifyProjectCreated } from "../data/systemNotifications";
 import { useNotificationContext } from "../context/notificationContextValue";
@@ -44,6 +52,8 @@ interface ProjectTaskCounts {
 
 interface ProjectCardProps {
   project: Project;
+  /** This project's real roster (ProjectContext's projectMembersByProjectId), mapped to display avatars — replaces the old local-only Project.people field. */
+  people: TeamMember[];
   taskCounts: ProjectTaskCounts;
   canManage: boolean;
   onSelect: () => void;
@@ -55,9 +65,10 @@ interface ProjectCardProps {
   onDelete: () => void;
 }
 
-function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onToggleMenu, onEdit, onDuplicate, onArchive, onDelete }: ProjectCardProps) {
+function ProjectCard({ project, people, taskCounts, canManage, onSelect, isMenuOpen, onToggleMenu, onEdit, onDuplicate, onArchive, onDelete }: ProjectCardProps) {
   const status = getProjectStatus(project);
   const statusMeta = PROJECT_STATUS_META[status];
+  const { icon: Icon } = resolveProjectIcon(project.tag);
 
   return (
     <div
@@ -71,34 +82,80 @@ function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onT
         }
       }}
       className="bg-card border-soft shadow-float lift fade-in flex flex-col"
-      style={{ borderRadius: 22, padding: 22, gap: 14, cursor: "pointer" }}
+      style={{ borderRadius: 22, padding: 24, gap: 16, cursor: "pointer" }}
     >
       <div className="flex items-start justify-between" style={{ gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div className="flex items-center" style={{ gap: 7, marginBottom: 8 }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: project.color ?? "var(--blue-dark)", flexShrink: 0 }} />
-            <h3 style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.3, color: "var(--text)" }}>{project.name}</h3>
+        <div className="flex items-start" style={{ gap: 12, minWidth: 0 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 13,
+              background: softTint(project.color),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon size={18} strokeWidth={2} color={project.color ?? "var(--blue-dark)"} />
           </div>
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <Pill tone="surface">{project.tag}</Pill>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: statusMeta.color }}>{statusMeta.label}</span>
+
+          <div style={{ minWidth: 0, paddingTop: 1 }}>
+            <h3
+              style={{
+                fontSize: 15.5,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                color: "var(--text)",
+                marginBottom: 6,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {project.name}
+            </h3>
+            <div className="flex items-center" style={{ gap: 6, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--text-2)",
+                  background: "var(--surface-2)",
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                }}
+              >
+                {project.tag}
+              </span>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: statusMeta.color,
+                  background: "var(--surface-2)",
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                }}
+              >
+                {statusMeta.label}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center" style={{ gap: 6, flexShrink: 0 }}>
-          <ProgressRing value={project.progress} size={40} stroke={4} />
-          {canManage && (
-            <ProjectActionsMenu
-              isOpen={isMenuOpen}
-              onToggle={onToggleMenu}
-              onEdit={onEdit}
-              onDuplicate={onDuplicate}
-              onArchive={onArchive}
-              onDelete={onDelete}
-              isArchived={status === "archived"}
-            />
-          )}
-        </div>
+        {canManage && (
+          <ProjectActionsMenu
+            isOpen={isMenuOpen}
+            onToggle={onToggleMenu}
+            onEdit={onEdit}
+            onDuplicate={onDuplicate}
+            onArchive={onArchive}
+            onDelete={onDelete}
+            isArchived={status === "archived"}
+          />
+        )}
       </div>
 
       <div className="flex items-center text-ink-3" style={{ gap: 10, fontSize: 12, flexWrap: "wrap" }}>
@@ -115,7 +172,7 @@ function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onT
         )}
       </div>
 
-      <div style={{ height: 6, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
+      <div style={{ height: 7, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
         <div
           style={{
             width: `${project.progress}%`,
@@ -128,7 +185,7 @@ function ProjectCard({ project, taskCounts, canManage, onSelect, isMenuOpen, onT
       </div>
 
       <div className="flex items-center justify-between">
-        <AvatarStack people={project.people} />
+        <AvatarStack people={people} />
         <span className="text-ink-3" style={{ fontSize: 11.5, fontWeight: 600 }}>
           {project.progress}%
         </span>
@@ -171,7 +228,14 @@ export default function Projects() {
   const navigate = useNavigate();
 
   const { tasks, setTasks, workspaceMembers } = useTaskContext();
-  const { projects, setProjects, isLoading: projectsLoading, error: projectsError } = useProjectContext();
+  const {
+    projects,
+    setProjects,
+    isLoading: projectsLoading,
+    error: projectsError,
+    projectMembersByProjectId,
+    addProjectMember,
+  } = useProjectContext();
   const { currentWorkspaceId } = useWorkspace();
   const { addNotification } = useNotificationContext();
   const members = useMemo(() => loadMembers(), []);
@@ -191,12 +255,16 @@ export default function Projects() {
     return canCreate;
   };
 
-  // Phase 25: creates the real backend Project (name/description are the
-  // only columns it has), then builds the frontend Project by merging
-  // that real record with the cosmetic fields (tag/color/dates/people)
-  // the backend doesn't store — same shape buildNewProject() used to
-  // build entirely locally, now anchored to a real id/createdAt instead
-  // of a client-generated one.
+  // Phase 25: creates the real backend Project. Phase 19 Frontend
+  // Integration audit fix (Priority 8): tag/color/startDate/dueDate are
+  // real, persisted columns (sent straight through). Phase 19 follow-up
+  // (Persist Project people): membership is real too — the backend
+  // auto-adds the creator as Owner, and each other selected workspace
+  // member is added for real via the same ProjectMember API
+  // ProjectTeamTab.tsx uses (default role "Viewer", same as that tab's
+  // own add-member default), through ProjectContext's addProjectMember
+  // so its shared projectMembersByProjectId map picks the new project up
+  // immediately — no separate local `people` field to keep in sync.
   async function handleCreateProject(values: CreateProjectValues) {
     if (!canCreate || !currentWorkspaceId) return;
 
@@ -206,26 +274,45 @@ export default function Projects() {
       const record = await createProjectRequest(currentWorkspaceId, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       const newProject: Project = {
         id: record.id,
         name: record.name,
-        tag: values.tag,
+        tag: record.tag ?? "",
         progress: 0,
         tasks: "0 / 0 tasks",
-        due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-        people: values.people,
+        due: dueDate ? formatProjectDue(dueDate) : "No due date",
         description: record.description ?? undefined,
-        color: values.color,
-        startDate: values.startDate || undefined,
-        dueDate: values.dueDate || undefined,
+        color: record.color ?? undefined,
+        startDate: record.startDate?.slice(0, 10),
+        dueDate,
         createdAt: record.createdAt,
         memberRoles: { [currentActor.initials]: "Owner" },
       };
 
       setProjects((current) => [newProject, ...current]);
       setIsCreateDrawerOpen(false);
+
+      // Best-effort — the project itself already exists by this point;
+      // one failed add shouldn't roll back project creation or block the
+      // others. A failed add just means that person isn't on the project
+      // yet, same recoverable state as if the creator forgot to select
+      // them (they can still be added from the Team tab).
+      const otherMemberIds = values.memberUserIds.filter((id) => id !== user?.id);
+      await Promise.all(
+        otherMemberIds.map((userId) =>
+          addProjectMember(newProject.id, userId, "Viewer").catch((error: unknown) =>
+            console.error("Couldn't add project member:", error),
+          ),
+        ),
+      );
 
       notifyProjectCreated(addNotification, {
         projectName: newProject.name,
@@ -246,13 +333,19 @@ export default function Projects() {
     setMutationError(null);
 
     try {
-      // Only name/description are real columns — everything else below
-      // stays a local-only field on top of the real record, same as
-      // creation.
+      // Every field below is a real, persisted column (Phase 19 audit fix,
+      // Priority 8). Membership isn't edited here — see
+      // CreateProjectDrawer.tsx's doc comment on memberUserIds.
       const record = await updateProjectRequest(currentWorkspaceId, editingProject.id, {
         name: values.name,
         description: values.description || undefined,
+        tag: values.tag,
+        color: values.color,
+        startDate: values.startDate || null,
+        dueDate: values.dueDate || null,
       });
+
+      const dueDate = record.dueDate?.slice(0, 10);
 
       setProjects((current) =>
         current.map((project) =>
@@ -260,13 +353,12 @@ export default function Projects() {
             ? {
                 ...project,
                 name: record.name,
-                tag: values.tag,
+                tag: record.tag ?? "",
                 description: record.description ?? undefined,
-                color: values.color,
-                startDate: values.startDate || undefined,
-                dueDate: values.dueDate || undefined,
-                due: values.dueDate ? formatProjectDue(values.dueDate) : "No due date",
-                people: values.people,
+                color: record.color ?? undefined,
+                startDate: record.startDate?.slice(0, 10),
+                dueDate,
+                due: dueDate ? formatProjectDue(dueDate) : "No due date",
               }
             : project
         )
@@ -361,6 +453,67 @@ export default function Projects() {
     completed: projects.filter((p) => getProjectStatus(p) === "completed").length,
     archived: projects.filter((p) => getProjectStatus(p) === "archived").length,
   };
+
+  /* ==========================================================
+     INFO CARDS (below the project grid) — every number below is
+     derived from the same `projects`/`tasks` this page already loads
+     from ProjectContext/TaskContext (unaffected by the search box or
+     the Active/Completed/Archived filter above, same as Dashboard's
+     own stat cards), reusing the exact status/due-date helpers the
+     rest of the app already relies on. No new data source, no
+     fabricated numbers.
+  ========================================================== */
+
+  const overviewCounts = {
+    total: projects.length,
+    active: counts.active,
+    completed: counts.completed,
+    archived: counts.archived,
+  };
+
+  const tasksByStatusCounts = useMemo(
+    () => ({
+      notStarted: tasks.filter((task) => task.status === "To Do").length,
+      inProgress: tasks.filter((task) => task.status === "In Progress").length,
+      completed: tasks.filter((task) => task.status === "Completed").length,
+    }),
+    [tasks]
+  );
+
+  // Same task/project deadline merge Dashboard.tsx's own Upcoming widget
+  // uses (getUpcomingTasks + getUpcomingProjects, sorted by due date) —
+  // kept page-local rather than shared, matching how Dashboard's version
+  // is page-local too.
+  const upcomingDeadlines = useMemo<DeadlineItem[]>(() => {
+    const upcomingTasks = getUpcomingTasks(tasks, 3);
+    const upcomingProjects = getUpcomingProjects(projects, 2);
+
+    const items: { item: DeadlineItem; sortKey: string }[] = [];
+
+    upcomingTasks.forEach((task) => {
+      items.push({
+        sortKey: task.dueDate ?? "",
+        // Task.due (TaskContext.tsx) is the raw "YYYY-MM-DD" string, not a
+        // relative label — unlike Project.due, which is already run
+        // through this same formatProjectDue() at load time. Reused here
+        // rather than duplicated: the function only ever looks at a plain
+        // "YYYY-MM-DD" string, so it works for a task's due date too.
+        item: { name: task.title, projectName: task.project, relative: task.dueDate ? formatProjectDue(task.dueDate) : "No due date" },
+      });
+    });
+
+    upcomingProjects.forEach((project) => {
+      items.push({
+        sortKey: project.dueDate ?? "",
+        item: { name: project.name, projectName: `${project.tag} project`, relative: project.due },
+      });
+    });
+
+    return items
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .slice(0, 4)
+      .map((entry) => entry.item);
+  }, [tasks, projects]);
 
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -503,6 +656,7 @@ export default function Projects() {
             <ProjectCard
               key={project.id}
               project={project}
+              people={(projectMembersByProjectId[project.id] ?? []).map(mapProjectMemberToTeamMember)}
               taskCounts={
                 taskCountsByProject.get(project.name) ?? {
                   completed: 0,
@@ -529,10 +683,28 @@ export default function Projects() {
         )}
       </div>
 
+      {!projectsLoading && !projectsError && currentWorkspaceId && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 fade-in" style={{ gap: 20, marginTop: 32 }}>
+          <ProjectOverviewCard
+            total={overviewCounts.total}
+            active={overviewCounts.active}
+            completed={overviewCounts.completed}
+            archived={overviewCounts.archived}
+          />
+          <UpcomingDeadlinesCard items={upcomingDeadlines} />
+          <TasksByStatusCard
+            notStarted={tasksByStatusCounts.notStarted}
+            inProgress={tasksByStatusCounts.inProgress}
+            completed={tasksByStatusCounts.completed}
+          />
+        </div>
+      )}
+
       <CreateProjectDrawer
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
         onCreate={handleCreateProject}
+        workspaceMembers={workspaceMembers.filter((member) => member.userId !== user?.id)}
       />
 
       <CreateProjectDrawer
