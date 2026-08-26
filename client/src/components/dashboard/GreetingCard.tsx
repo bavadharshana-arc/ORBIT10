@@ -109,6 +109,27 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
       }}
     >
       {/* ============================================================
+          DECORATIVE ARTWORK — hidden below `sm`
+
+          Every purely-decorative layer in this card (the celestial
+          photo, the corner orbit SVG, and both scatter dot/star sets)
+          is wrapped in one `hidden sm:block` container — the same
+          breakpoint/convention CelestialDivider below already uses for
+          its own decorative lines. `hidden` is `display: none`, so on
+          mobile none of this is rendered or painted and it reserves no
+          layout space at all (not opacity/visibility, which would
+          still occupy space or leave it in the accessibility tree).
+          The wrapper itself sets no `position`, so descendants' own
+          `position: absolute` still anchors to the card's
+          `position: relative` exactly as before — nothing here changes
+          how any of it is positioned once visible at `sm`+. Desktop
+          (`sm` and up) is untouched: same elements, same styles, same
+          DOM structure, just no longer unconditionally mounted below
+          640px. The hero card itself, and everything in the text/
+          button column further down, is completely outside this
+          wrapper and renders at every width unchanged. */}
+      <div className="hidden sm:block" aria-hidden="true">
+      {/* ============================================================
           NEW — CELESTIAL ARTWORK LAYER (strictly additive)
 
           reference/download (5).jpe, rendered verbatim (not a CSS/SVG
@@ -337,6 +358,7 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
           <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" fill={s.color} />
         </svg>
       ))}
+      </div>
 
       <div style={{ position: "relative", maxWidth: 480 }}>
         {/* Decorative lines flanking the date pill only — additive, and
