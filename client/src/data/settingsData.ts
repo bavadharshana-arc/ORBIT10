@@ -117,7 +117,20 @@ const DEFAULT_SETTINGS: OrbitSettings = {
     pushMentions: true,
   },
   appearance: {
-    theme: "system",
+    // Mobile responsiveness audit: this used to be "system", so any
+    // visitor with no saved settings (localStorage's "orbit-settings" key
+    // absent — every fresh visit, mobile or desktop) had their theme
+    // silently follow the OS/browser's prefers-color-scheme via
+    // resolveTheme() below. On a phone set to dark mode that flips the
+    // *entire* app dark on first load, contradicting this file's own
+    // globals.css comment ("the light theme... stays the default and
+    // untouched when no preference is set") and leaving anything styled
+    // with hardcoded (non --token) colors elsewhere in the app illegible
+    // against the swapped dark surface. "system" stays fully selectable
+    // in Settings -> Appearance — this only changes what an
+    // unconfigured visitor gets by default, matching Orbit's established
+    // light appearance until someone deliberately opts into System/Dark.
+    theme: "light",
     accent: "dusk",
     reduceMotion: false,
   },

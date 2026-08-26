@@ -320,7 +320,17 @@ export function TaskRow({ task, canEdit, onClick, onToggleStatus, onDelete }: Ta
           onClick();
         }
       }}
-      className="bg-card border-soft hover:shadow-[0_6px_20px_-10px_rgba(32,36,43,0.22)] hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue-dark)]"
+      // Below `sm`, the row's fixed-width metadata (due date, comment
+      // count, avatars, actions menu) no longer fits alongside the title
+      // on one line — with the default `flex-wrap: nowrap` that meant
+      // those items got squeezed or clipped by DashboardLayout's
+      // page-level overflow-x-hidden instead of actually shrinking,
+      // silently hiding real functionality on narrow phones. Wrapping
+      // lets the title/status stay on their own line and the metadata
+      // reflow onto a second line instead of disappearing; `sm:flex-nowrap`
+      // restores the exact original single-line layout everywhere the
+      // row already had room for it (640px+, unchanged from before).
+      className="bg-card border-soft hover:shadow-[0_6px_20px_-10px_rgba(32,36,43,0.22)] hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue-dark)] flex-wrap sm:flex-nowrap"
       style={{
         width: "100%",
         borderRadius: 14,
@@ -328,7 +338,8 @@ export function TaskRow({ task, canEdit, onClick, onToggleStatus, onDelete }: Ta
         padding: "13px 16px 13px 14px",
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        rowGap: 10,
+        columnGap: 14,
         cursor: "pointer",
         textAlign: "left",
         transition: "box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease",

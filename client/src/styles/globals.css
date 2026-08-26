@@ -191,7 +191,24 @@
    Namespaced under the <html> data attributes set by
    src/data/settingsData.ts#applyAppearance, so the light theme
    above stays the default and untouched when no preference is set.
+
+   color-scheme tells the browser which palette to use for UI it draws
+   itself — native date/time pickers, scrollbars, form control chrome —
+   that our own CSS variables above never touch. Without it, a phone
+   set to OS dark mode renders those natively dark even while the app
+   around them is (correctly, now) light, which looks exactly like the
+   "incorrectly dark" bug this whole section exists to prevent. Mirrors
+   data-theme exactly: light by default, dark only once data-theme is
+   actually "dark" (an explicit user choice, not the OS default).
 ------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
 
 html[data-theme="dark"] .orbit-root {
   --surface: #14171c;

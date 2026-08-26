@@ -108,7 +108,7 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
       />
 
       <aside
-        className={`bg-surface-2 border-soft shadow-float fade-in fixed inset-y-0 left-0 z-50 flex w-62w-[85vw] shrink-0 flex-col p-5 transition-transform duration-300 ease-in-out lg:sticky lg:inset-y-auto lg:left-auto lg:top-5 lg:z-0 lg:h-[calc(100%-40px)] lg:w-[248px] lg:max-w-none lg:translate-x-0 ${
+        className={`bg-surface-2 border-soft shadow-float fade-in fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-[300px] shrink-0 flex-col p-5 transition-transform duration-300 ease-in-out lg:sticky lg:inset-y-auto lg:left-auto lg:top-5 lg:z-0 lg:h-[calc(100%-40px)] lg:w-[248px] lg:max-w-none lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ borderRadius: 24 }}
@@ -126,17 +126,20 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
             onClick={onClose}
             className="nav-item flex lg:hidden"
             style={{
-              width: 30,
-              height: 30,
+              // Only ever rendered below `lg` (desktop never shows this
+              // button), so sizing it to the ~44px touch-target guideline
+              // is safe — no desktop appearance change.
+              width: 44,
+              height: 44,
               alignItems: "center",
               justifyContent: "center",
               border: "none",
               background: "var(--surface)",
-              borderRadius: 10,
+              borderRadius: 12,
               cursor: "pointer",
             }}
           >
-            <X size={15} strokeWidth={1.8} color="var(--text-2)" />
+            <X size={16} strokeWidth={1.8} color="var(--text-2)" />
           </button>
         </div>
 
@@ -236,7 +239,7 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
           aria-modal="true"
           aria-labelledby="logout-confirm-title"
           aria-describedby="logout-confirm-description"
-          className="fixed inset-0 z-60 flex items-center justify-center p-5"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-5"
         >
           <button
             type="button"

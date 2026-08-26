@@ -16,8 +16,10 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         onClick={onMenuClick}
         className="bg-card border-soft lift flex lg:hidden"
         style={{
-          width: 42,
-          height: 42,
+          // Only ever rendered below `lg` — bumped to the ~44px
+          // touch-target guideline with no desktop appearance change.
+          width: 44,
+          height: 44,
           borderRadius: 14,
           alignItems: "center",
           justifyContent: "center",
@@ -25,7 +27,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           cursor: "pointer",
         }}
       >
-        <Menu size={17} strokeWidth={1.8} color="#20242B" />
+        <Menu size={18} strokeWidth={1.8} color="#20242B" />
       </button>
 
       <div className="flex items-center" style={{ gap: 12 }}>
