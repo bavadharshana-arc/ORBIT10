@@ -1,6 +1,16 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  // server/package.json has no "type" field (CommonJS, matching
+  // tsconfig.json's "module": "nodenext" with no ESM signal anywhere in
+  // the tree) — without this, the generator auto-detects the target
+  // module format and gets it wrong, emitting an `import.meta.url`
+  // reference (ESM-only syntax) inside otherwise-CommonJS output. That
+  // produces a file Node can't load either way: `node dist/index.js`
+  // fails with "ReferenceError: exports is not defined in ES module
+  // scope" the moment the generated client is required. Pinning this
+  // explicitly matches the project's actual (CommonJS) module system.
+  moduleFormat = "cjs"
 }
 
 datasource db {
