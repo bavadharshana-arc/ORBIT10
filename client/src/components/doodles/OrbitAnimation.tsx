@@ -15,7 +15,7 @@ export function OrbitAnimation() {
             cy="20"
             rx="17"
             ry="8"
-            stroke="#8EA7BF"
+            stroke="var(--blue-dark)"
             strokeWidth="1.2"
           />
 
@@ -24,7 +24,7 @@ export function OrbitAnimation() {
             cy="20"
             rx="17"
             ry="8"
-            stroke="#20242B"
+            stroke="var(--text)"
             strokeWidth="1.2"
             transform="rotate(60 20 20)"
           />
@@ -33,7 +33,7 @@ export function OrbitAnimation() {
 
 
       {/* center dot */}
-      <div className="absolute h-3 w-3 rounded-full bg-[#20242B]" />
+      <div className="absolute h-3 w-3 rounded-full bg-[var(--text)]" />
 
     </div>
   );

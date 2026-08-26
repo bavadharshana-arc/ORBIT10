@@ -14,18 +14,18 @@ const TONES: Record<
   }
 > = {
   surface: {
-    background: "#EEF2F6",
-    color: "#667085",
+    background: "var(--surface-2)",
+    color: "var(--text-2)",
   },
 
   blue: {
-    background: "#AFC5DA",
-    color: "#20242B",
+    background: "var(--blue)",
+    color: "var(--text)",
   },
 
   dark: {
-    background: "#20242B",
-    color: "#F7F8FA",
+    background: "var(--text)",
+    color: "var(--surface)",
   },
 };
 

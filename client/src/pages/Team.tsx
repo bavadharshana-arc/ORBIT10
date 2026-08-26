@@ -130,22 +130,22 @@ function EmptyState({
         padding: "48px 24px",
         textAlign: "center",
         gap: 10,
-        background: "#FFFFFF",
-        border: "1px solid #E4E8ED",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         borderRadius: 16,
       }}
     >
       <Users
         size={26}
         strokeWidth={1.6}
-        color="#98A2B3"
+        color="var(--text-3)"
       />
 
       <p
         style={{
           fontSize: 14,
           fontWeight: 600,
-          color: "#20242B",
+          color: "var(--text)",
           margin: 0,
         }}
       >
@@ -155,7 +155,7 @@ function EmptyState({
       <p
         style={{
           fontSize: 12.5,
-          color: "#667085",
+          color: "var(--text-2)",
           maxWidth: 280,
           margin: 0,
         }}
@@ -711,7 +711,7 @@ export default function Team() {
               fontSize: 28,
               fontWeight: 560,
               marginBottom: 6,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             Team
@@ -720,7 +720,7 @@ export default function Team() {
           <p
             style={{
               fontSize: 13.5,
-              color: "#667085",
+              color: "var(--text-2)",
               margin: 0,
             }}
           >
@@ -737,8 +737,8 @@ export default function Team() {
             }
             className="lift"
             style={{
-              background: "#20242B",
-              color: "#F7F8FA",
+              background: "var(--text)",
+              color: "var(--surface)",
               border: "none",
               borderRadius: 12,
               padding: "11px 18px",
@@ -890,9 +890,9 @@ export default function Team() {
         <div
           style={{
             minWidth: 0,
-            background: "#FFFFFF",
+            background: "var(--card)",
             border:
-              "1px solid #E4E8ED",
+              "1px solid var(--border)",
             borderRadius: 16,
             overflow: "hidden",
           }}
@@ -904,9 +904,9 @@ export default function Team() {
             style={{
               gap: 10,
               padding: 14,
-              background: "#FFFFFF",
+              background: "var(--card)",
               borderBottom:
-                "1px solid #E4E8ED",
+                "1px solid var(--border)",
             }}
           >
             {/* SEARCH */}
@@ -920,15 +920,15 @@ export default function Team() {
                 padding:
                   "8px 10px",
                 background:
-                  "#F7F8FA",
+                  "var(--surface)",
                 border:
-                  "1px solid #E4E8ED",
+                  "1px solid var(--border)",
                 borderRadius: 10,
               }}
             >
               <Search
                 size={15}
-                color="#98A2B3"
+                color="var(--text-3)"
               />
 
               <input
@@ -944,7 +944,7 @@ export default function Team() {
                   background:
                     "transparent",
                   fontSize: 12.5,
-                  color: "#20242B",
+                  color: "var(--text)",
                   width: "100%",
                 }}
               />
@@ -962,7 +962,7 @@ export default function Team() {
                     cursor:
                       "pointer",
                     color:
-                      "#98A2B3",
+                      "var(--text-3)",
                     display: "flex",
                   }}
                 >
@@ -1073,7 +1073,7 @@ export default function Team() {
               style={{
                 gap: 2,
                 background:
-                  "#EEF2F6",
+                  "var(--surface-2)",
                 borderRadius: 10,
                 padding: 3,
               }}
@@ -1130,16 +1130,16 @@ export default function Team() {
                 padding:
                   "10px 14px",
                 background:
-                  "#FFFFFF",
+                  "var(--card)",
                 borderBottom:
-                  "1px solid #E4E8ED",
+                  "1px solid var(--border)",
               }}
             >
               <span
                 style={{
                   fontSize: 10.5,
                   color:
-                    "#98A2B3",
+                    "var(--text-3)",
                 }}
               >
                 Showing
@@ -1189,7 +1189,7 @@ export default function Team() {
                   background:
                     "transparent",
                   color:
-                    "#8EA7BF",
+                    "var(--blue-dark)",
                   fontSize: 10.5,
                   fontWeight: 600,
                   cursor:
@@ -1209,7 +1209,7 @@ export default function Team() {
             style={{
               padding: 16,
               background:
-                "#F7F8FA",
+                "var(--surface)",
             }}
           >
             {membersLoading || workspaceLoading ? (
@@ -1375,13 +1375,13 @@ export default function Team() {
 const filterStyle = {
   appearance: "none" as const,
   border:
-    "1px solid #E4E8ED",
+    "1px solid var(--border)",
   borderRadius: 10,
-  background: "#F7F8FA",
+  background: "var(--surface)",
   padding: "8px 12px",
   fontSize: 11.5,
   fontWeight: 600,
-  color: "#20242B",
+  color: "var(--text)",
   outline: "none",
   cursor: "pointer",
 };
@@ -1389,8 +1389,8 @@ const filterStyle = {
 const activeFilterStyle = {
   padding: "4px 8px",
   borderRadius: 6,
-  background: "#EEF2F6",
-  color: "#667085",
+  background: "var(--surface-2)",
+  color: "var(--text-2)",
   fontSize: 10,
   fontWeight: 600,
 };
@@ -1404,14 +1404,14 @@ function viewToggleStyle(
     borderRadius: 7,
     border: "none",
     background: active
-      ? "#FFFFFF"
+      ? "var(--card)"
       : "transparent",
     boxShadow: active
       ? "0 1px 2px rgba(32,36,43,0.08)"
       : "none",
     color: active
-      ? "#20242B"
-      : "#98A2B3",
+      ? "var(--text)"
+      : "var(--text-3)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",

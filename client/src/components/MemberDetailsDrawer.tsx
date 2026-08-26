@@ -185,7 +185,7 @@ export function MemberDetailsDrawer({
                 height: 13,
                 borderRadius: "50%",
                 background: statusDot,
-                boxShadow: "0 0 0 3px #FFFFFF",
+                boxShadow: "0 0 0 3px var(--card)",
               }}
             />
           </div>
@@ -199,7 +199,7 @@ export function MemberDetailsDrawer({
               style={{
                 fontSize: 19,
                 fontWeight: 600,
-                color: "#20242B",
+                color: "var(--text)",
                 border: "none",
                 outline: "none",
                 background: "transparent",
@@ -278,12 +278,12 @@ export function MemberDetailsDrawer({
               Email
             </label>
             <div className="flex items-center" style={{ ...inputStyle, gap: 8 }}>
-              <Mail size={13} color="#98A2B3" />
+              <Mail size={13} color="var(--text-3)" />
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={!canEdit || readOnlyProfileFields}
-                style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "var(--text)" }}
               />
             </div>
           </div>
@@ -294,12 +294,12 @@ export function MemberDetailsDrawer({
                 Phone
               </label>
               <div className="flex items-center" style={{ ...inputStyle, gap: 8 }}>
-                <Phone size={13} color="#98A2B3" />
+                <Phone size={13} color="var(--text-3)" />
                 <input
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   disabled={!canEdit || readOnlyProfileFields}
-                  style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
+                  style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "var(--text)" }}
                 />
               </div>
             </div>
@@ -309,12 +309,12 @@ export function MemberDetailsDrawer({
                 Location
               </label>
               <div className="flex items-center" style={{ ...inputStyle, gap: 8 }}>
-                <MapPin size={13} color="#98A2B3" />
+                <MapPin size={13} color="var(--text-3)" />
                 <input
                   value={location}
                   onChange={(event) => setLocation(event.target.value)}
                   disabled={!canEdit || readOnlyProfileFields}
-                  style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "#20242B" }}
+                  style={{ border: "none", outline: "none", background: "transparent", fontSize: 12.5, flex: 1, color: "var(--text)" }}
                 />
               </div>
             </div>
@@ -328,14 +328,14 @@ export function MemberDetailsDrawer({
         </div>
 
         {/* STATS */}
-        <div style={{ borderTop: "1px solid #E4E8ED", paddingTop: 16 }}>
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
           <div className="flex items-center text-ink-2" style={{ gap: 6, marginBottom: 12 }}>
             <CalendarDays size={14} />
             <span style={{ fontSize: 12.5, fontWeight: 650 }}>Activity summary</span>
           </div>
 
           <div className="grid grid-cols-2" style={{ gap: 10 }}>
-            <div className="border-soft" style={{ borderRadius: 12, padding: "10px 12px", background: "#F7F8FA" }}>
+            <div className="border-soft" style={{ borderRadius: 12, padding: "10px 12px", background: "var(--surface)" }}>
               <div className="font-display" style={{ fontSize: 18, fontWeight: 560 }}>
                 {member.tasksActive}
               </div>
@@ -343,7 +343,7 @@ export function MemberDetailsDrawer({
                 Active tasks
               </div>
             </div>
-            <div className="border-soft" style={{ borderRadius: 12, padding: "10px 12px", background: "#F7F8FA" }}>
+            <div className="border-soft" style={{ borderRadius: 12, padding: "10px 12px", background: "var(--surface)" }}>
               <div className="font-display" style={{ fontSize: 18, fontWeight: 560 }}>
                 {member.tasksCompleted}
               </div>
@@ -367,21 +367,21 @@ const headerButtonStyle = {
   height: 28,
   borderRadius: 8,
   border: "none",
-  background: "#EEF2F6",
+  background: "var(--surface-2)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  color: "#667085",
+  color: "var(--text-2)",
 } as const;
 
 const inputStyle = {
-  border: "1px solid #E4E8ED",
+  border: "1px solid var(--border)",
   borderRadius: 10,
   padding: "8px 10px",
   fontSize: 12.5,
-  color: "#20242B",
-  background: "#F7F8FA",
+  color: "var(--text)",
+  background: "var(--surface)",
   outline: "none",
 } as const;
 
@@ -391,8 +391,8 @@ const selectStyle = {
 } as const;
 
 const saveButtonStyle = {
-  background: "#20242B",
-  color: "#F7F8FA",
+  background: "var(--text)",
+  color: "var(--surface)",
   border: "none",
   borderRadius: 12,
   padding: "10px 16px",

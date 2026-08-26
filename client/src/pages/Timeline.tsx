@@ -75,7 +75,7 @@ function EmptyState({ title, message }: { title: string; message: string }) {
         gap: 10,
       }}
     >
-      <FolderOpen size={26} strokeWidth={1.6} color="#98A2B3" />
+      <FolderOpen size={26} strokeWidth={1.6} color="var(--text-3)" />
       <p style={{ fontSize: 14, fontWeight: 600 }}>{title}</p>
       <p className="text-ink-3" style={{ fontSize: 12.5, maxWidth: 280 }}>
         {message}
@@ -107,7 +107,7 @@ function ProjectGroupRow({
     <GanttRow
       totalWidth={totalWidth}
       daysWidth={daysWidth}
-      labelBackground="#F7F8FA"
+      labelBackground="var(--surface)"
       label={
         <button
           type="button"
@@ -127,7 +127,7 @@ function ProjectGroupRow({
         >
           <ChevronDown
             size={13}
-            color="#667085"
+            color="var(--text-2)"
             style={{
               transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
               transition: "transform 160ms ease",
@@ -136,7 +136,7 @@ function ProjectGroupRow({
           />
           <span
             className="font-display"
-            style={{ fontSize: 12.5, fontWeight: 650, color: "#20242B" }}
+            style={{ fontSize: 12.5, fontWeight: 650, color: "var(--text)" }}
           >
             {project}
           </span>
@@ -146,7 +146,7 @@ function ProjectGroupRow({
         </button>
       }
     >
-      <div style={{ width: daysWidth, background: "#F7F8FA" }} />
+      <div style={{ width: daysWidth, background: "var(--surface)" }} />
     </GanttRow>
   );
 }
@@ -171,7 +171,7 @@ function StatusLegend() {
               height: 10,
               borderRadius: 3,
               background: STATUS_BAR_COLOR[status],
-              border: status === "To Do" ? "1px solid #E4E8ED" : "none",
+              border: status === "To Do" ? "1px solid var(--border)" : "none",
             }}
           />
           {status}
@@ -511,7 +511,7 @@ export default function Timeline() {
               padding: "7px 14px",
               fontSize: 12.5,
               fontWeight: 600,
-              color: "#20242B",
+              color: "var(--text)",
               background: "transparent",
               cursor: "pointer",
             }}
@@ -534,7 +534,7 @@ export default function Timeline() {
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                color: "#667085",
+                color: "var(--text-2)",
               }}
             >
               <ChevronLeft size={16} />
@@ -554,7 +554,7 @@ export default function Timeline() {
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                color: "#667085",
+                color: "var(--text-2)",
               }}
             >
               <ChevronRight size={16} />
@@ -562,7 +562,7 @@ export default function Timeline() {
           </div>
           <span
             className="font-display"
-            style={{ fontSize: 14, fontWeight: 600, color: "#20242B" }}
+            style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}
           >
             {formatRangeLabel(rangeStart, rangeEnd)}
           </span>
@@ -577,11 +577,11 @@ export default function Timeline() {
               gap: 8,
               padding: "7px 12px",
               borderRadius: 10,
-              background: "#EEF2F6",
+              background: "var(--surface-2)",
               width: 180,
             }}
           >
-            <Search size={13} color="#98A2B3" />
+            <Search size={13} color="var(--text-3)" />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -591,7 +591,7 @@ export default function Timeline() {
                 outline: "none",
                 background: "transparent",
                 fontSize: 12,
-                color: "#20242B",
+                color: "var(--text)",
                 width: "100%",
               }}
             />
@@ -605,7 +605,7 @@ export default function Timeline() {
           >
             <SlidersHorizontal
               size={12}
-              color="#667085"
+              color="var(--text-2)"
               style={{ position: "absolute", left: 11, pointerEvents: "none" }}
             />
             <select
@@ -615,13 +615,13 @@ export default function Timeline() {
               }
               style={{
                 appearance: "none",
-                background: "#EEF2F6",
+                background: "var(--surface-2)",
                 border: "none",
                 borderRadius: 10,
                 padding: "8px 28px 8px 30px",
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#20242B",
+                color: "var(--text)",
                 cursor: "pointer",
                 outline: "none",
               }}
@@ -634,7 +634,7 @@ export default function Timeline() {
             </select>
             <ChevronDown
               size={12}
-              color="#667085"
+              color="var(--text-2)"
               style={{
                 position: "absolute",
                 right: 10,
@@ -648,7 +648,7 @@ export default function Timeline() {
 
           <div
             className="flex items-center"
-            style={{ background: "#EEF2F6", borderRadius: 10, padding: 2, gap: 2 }}
+            style={{ background: "var(--surface-2)", borderRadius: 10, padding: 2, gap: 2 }}
           >
             {(["week", "month"] as ViewMode[]).map((mode) => {
               const isActive = viewMode === mode;
@@ -665,8 +665,8 @@ export default function Timeline() {
                     fontWeight: 600,
                     textTransform: "capitalize",
                     cursor: "pointer",
-                    background: isActive ? "#FFFFFF" : "transparent",
-                    color: isActive ? "#20242B" : "#667085",
+                    background: isActive ? "var(--card)" : "transparent",
+                    color: isActive ? "var(--text)" : "var(--text-2)",
                   }}
                 >
                   {mode}
@@ -750,7 +750,7 @@ export default function Timeline() {
           {unscheduledTasks.length > 0 && (
             <div
               style={{
-                borderTop: "1px solid #E4E8ED",
+                borderTop: "1px solid var(--border)",
                 marginTop: 10,
                 marginRight: 18,
                 paddingTop: 9,

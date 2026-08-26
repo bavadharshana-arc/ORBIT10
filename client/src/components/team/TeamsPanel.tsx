@@ -15,8 +15,8 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
       style={{
         borderRadius: 16,
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E4E8ED",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         boxShadow: "0 2px 8px rgba(32, 36, 43, 0.04)",
       }}
     >
@@ -34,7 +34,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
             style={{
               fontSize: 15,
               fontWeight: 600,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             Teams
@@ -44,7 +44,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
             style={{
               margin: "3px 0 0",
               fontSize: 11,
-              color: "#98A2B3",
+              color: "var(--text-3)",
             }}
           >
             Your organization teams
@@ -58,8 +58,8 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
             height: 26,
             padding: "0 7px",
             borderRadius: 8,
-            background: "#EEF2F6",
-            color: "#667085",
+            background: "var(--surface-2)",
+            color: "var(--text-2)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -90,8 +90,8 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
               style={{
                 padding: 11,
                 borderRadius: 11,
-                background: "#F7F8FA",
-                border: "1px solid #E4E8ED",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
                 transition: "all 0.2s ease",
               }}
             >
@@ -116,7 +116,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
                       width: 28,
                       height: 28,
                       borderRadius: 8,
-                      background: "#EEF2F6",
+                      background: "var(--surface-2)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -125,7 +125,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
                   >
                     <Users2
                       size={14}
-                      color="#8EA7BF"
+                      color="var(--blue-dark)"
                       strokeWidth={1.8}
                     />
                   </div>
@@ -141,7 +141,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
                         display: "block",
                         fontSize: 12.5,
                         fontWeight: 650,
-                        color: "#20242B",
+                        color: "var(--text)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -155,7 +155,7 @@ export function TeamsPanel({ teams, members }: TeamsPanelProps) {
                         display: "block",
                         marginTop: 2,
                         fontSize: 10.5,
-                        color: "#98A2B3",
+                        color: "var(--text-3)",
                       }}
                     >
                       {teamMembers.length}{" "}

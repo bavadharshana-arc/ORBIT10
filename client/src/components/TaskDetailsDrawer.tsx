@@ -44,7 +44,7 @@ export interface AssigneeOption {
    Stage 2 (Real Task Assignees) — confirmed via a zero-results grep.
 ================================================================ */
 
-const NEUTRAL_ASSIGNEE_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+const NEUTRAL_ASSIGNEE_AVATAR = { bg: "var(--blue)", fg: "var(--text)" };
 
 /**
  * Stage 2 (Real Task Assignees) — same AssigneeOption shape as
@@ -853,17 +853,17 @@ export function TaskDetailsDrawer({
               height: 28,
               borderRadius: 8,
               border: "none",
-              background: "#EEF2F6",
+              background: "var(--surface-2)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              color: "#667085",
+              color: "var(--text-2)",
             }}
           >
             <X size={15} />
           </button>
-          <span style={{ fontSize: 14, fontWeight: 650, color: "#20242B" }}>Task not found</span>
+          <span style={{ fontSize: 14, fontWeight: 650, color: "var(--text)" }}>Task not found</span>
           <span className="text-ink-3" style={{ fontSize: 12, maxWidth: 260 }}>
             This task may have been deleted, or it isn't available anymore.
           </span>
@@ -957,14 +957,14 @@ export function TaskDetailsDrawer({
                   borderRadius: 8,
                   border: "none",
                   background:
-                    "#EEF2F6",
+                    "var(--surface-2)",
                   display: "flex",
                   alignItems:
                     "center",
                   justifyContent:
                     "center",
                   cursor: "pointer",
-                  color: "#667085",
+                  color: "var(--text-2)",
                 }}
               >
                 <Trash2 size={15} />
@@ -981,14 +981,14 @@ export function TaskDetailsDrawer({
                 borderRadius: 8,
                 border: "none",
                 background:
-                  "#EEF2F6",
+                  "var(--surface-2)",
                 display: "flex",
                 alignItems:
                   "center",
                 justifyContent:
                   "center",
                 cursor: "pointer",
-                color: "#667085",
+                color: "var(--text-2)",
               }}
             >
               <X size={15} />
@@ -1012,7 +1012,7 @@ export function TaskDetailsDrawer({
           style={{
             fontSize: 19,
             fontWeight: 600,
-            color: "#20242B",
+            color: "var(--text)",
             border: "none",
             outline: "none",
             background:
@@ -1246,12 +1246,12 @@ export function TaskDetailsDrawer({
                           999,
                         border:
                           isSelected
-                            ? "1px solid #8EA7BF"
-                            : "1px solid #E4E8ED",
+                            ? "1px solid var(--blue-dark)"
+                            : "1px solid var(--border)",
                         background:
                           isSelected
-                            ? "#EEF2F6"
-                            : "#FFFFFF",
+                            ? "var(--surface-2)"
+                            : "var(--card)",
                         cursor:
                           canEdit ? "pointer" : "default",
                       }}
@@ -1280,7 +1280,7 @@ export function TaskDetailsDrawer({
                           fontSize: 12,
                           fontWeight: 600,
                           color:
-                            "#20242B",
+                            "var(--text)",
                         }}
                       >
                         {
@@ -1340,9 +1340,9 @@ export function TaskDetailsDrawer({
               className="lift"
               style={{
                 background:
-                  "#20242B",
+                  "var(--text)",
                 color:
-                  "#F7F8FA",
+                  "var(--surface)",
                 border: "none",
                 borderRadius: 12,
                 padding:
@@ -1367,7 +1367,7 @@ export function TaskDetailsDrawer({
         <div
           style={{
             borderTop:
-              "1px solid #E4E8ED",
+              "1px solid var(--border)",
             paddingTop: 16,
             marginBottom: 16,
           }}
@@ -1455,7 +1455,7 @@ export function TaskDetailsDrawer({
                         padding:
                           "10px 12px",
                         background:
-                          "#F7F8FA",
+                          "var(--surface)",
                       }}
                     >
                       <div
@@ -1496,7 +1496,7 @@ export function TaskDetailsDrawer({
                               fontSize: 12,
                               fontWeight: 650,
                               color:
-                                "#20242B",
+                                "var(--text)",
                             }}
                           >
                             {
@@ -1623,7 +1623,7 @@ export function TaskDetailsDrawer({
                               fontFamily:
                                 "inherit",
                               background:
-                                "#FFFFFF",
+                                "var(--card)",
                             }}
                           />
 
@@ -1646,9 +1646,9 @@ export function TaskDetailsDrawer({
                                 padding:
                                   "5px 10px",
                                 background:
-                                  "#20242B",
+                                  "var(--text)",
                                 color:
-                                  "#F7F8FA",
+                                  "var(--surface)",
                                 fontSize: 11.5,
                                 fontWeight: 600,
                                 cursor:
@@ -1668,14 +1668,14 @@ export function TaskDetailsDrawer({
                               }
                               style={{
                                 border:
-                                  "1px solid #E4E8ED",
+                                  "1px solid var(--border)",
                                 borderRadius: 8,
                                 padding:
                                   "5px 10px",
                                 background:
-                                  "#FFFFFF",
+                                  "var(--card)",
                                 color:
-                                  "#667085",
+                                  "var(--text-2)",
                                 fontSize: 11.5,
                                 fontWeight: 600,
                                 cursor:
@@ -1692,7 +1692,7 @@ export function TaskDetailsDrawer({
                             margin: 0,
                             fontSize: 12,
                             color:
-                              "#20242B",
+                              "var(--text)",
                             lineHeight: 1.5,
                           }}
                         >
@@ -1760,9 +1760,9 @@ export function TaskDetailsDrawer({
                   borderRadius: 10,
                   border: "none",
                   background:
-                    "#20242B",
+                    "var(--text)",
                   color:
-                    "#F7F8FA",
+                    "var(--surface)",
                   display: "flex",
                   alignItems:
                     "center",
@@ -1834,7 +1834,7 @@ export function TaskDetailsDrawer({
                       style={{
                         fontSize: 12,
                         color:
-                          "#20242B",
+                          "var(--text)",
                       }}
                     >
                       {
@@ -1871,12 +1871,12 @@ export function TaskDetailsDrawer({
 
 const inputStyle = {
   border:
-    "1px solid #E4E8ED",
+    "1px solid var(--border)",
   borderRadius: 10,
   padding: "8px 10px",
   fontSize: 12.5,
-  color: "#20242B",
-  background: "#F7F8FA",
+  color: "var(--text)",
+  background: "var(--surface)",
   outline: "none",
 };
 
@@ -1895,6 +1895,6 @@ const commentIconButtonStyle = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  color: "#98A2B3",
+  color: "var(--text-3)",
   flexShrink: 0,
 };

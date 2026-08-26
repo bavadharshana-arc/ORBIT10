@@ -61,9 +61,9 @@ export const PRIORITY_TONE: Record<Priority, PillTone> = {
 };
 
 export const STATUS_BAR_COLOR: Record<Status, string> = {
-  "To Do": "#E4E8ED",
-  "In Progress": "#AFC5DA",
-  Completed: "#20242B",
+  "To Do": "var(--border)",
+  "In Progress": "var(--blue)",
+  Completed: "var(--text)",
 };
 
 export const STATUS_ICON: Record<Status, typeof CheckCircle2> = {
@@ -300,8 +300,8 @@ export function TimelineDateHeader({
     <GanttRow
       totalWidth={totalWidth}
       daysWidth={daysWidth}
-      labelBackground="#FFFFFF"
-      borderBottom="1px solid #E4E8ED"
+      labelBackground="var(--card)"
+      borderBottom="1px solid var(--border)"
       label={
         <div className="text-ink-3" style={{ fontSize: 11, fontWeight: 650, padding: "0 4px 5px" }}>
           Task
@@ -336,8 +336,8 @@ export function TimelineDateHeader({
                   margin: "2px auto 0",
                   fontSize: 11,
                   fontWeight: 650,
-                  background: isToday ? "#20242B" : "transparent",
-                  color: isToday ? "#F7F8FA" : "#20242B",
+                  background: isToday ? "var(--text)" : "transparent",
+                  color: isToday ? "var(--surface)" : "var(--text)",
                 }}
               >
                 {day.getDate()}
@@ -413,8 +413,8 @@ export function TaskGanttRow({
     <GanttRow
       totalWidth={totalWidth}
       daysWidth={daysWidth}
-      labelBackground={isSelected ? "#EEF2F6" : "#FFFFFF"}
-      borderBottom="1px solid #EEF2F6"
+      labelBackground={isSelected ? "var(--surface-2)" : "var(--card)"}
+      borderBottom="1px solid var(--surface-2)"
       onClick={onSelect}
       label={
         <div
@@ -430,7 +430,7 @@ export function TaskGanttRow({
             style={{
               fontSize: 12.5,
               fontWeight: 650,
-              color: "#20242B",
+              color: "var(--text)",
               // The wider LABEL_WIDTH above already gives most real
               // titles room to sit on one line; anything still too long
               // now ellipses cleanly (the `title` attribute keeps the
@@ -474,7 +474,7 @@ export function TaskGanttRow({
                 width: dayWidth,
                 flexShrink: 0,
                 height: "100%",
-                background: isSelected ? "#EEF2F6" : isToday ? "rgba(142,167,191,0.08)" : "transparent",
+                background: isSelected ? "var(--surface-2)" : isToday ? "rgba(142,167,191,0.08)" : "transparent",
               }}
             />
           );
@@ -510,12 +510,12 @@ export function TaskGanttRow({
               cursor: "pointer",
             }}
           >
-            <StatusIcon size={12} color={task.status === "Completed" ? "#F7F8FA" : "#20242B"} style={{ flexShrink: 0 }} />
+            <StatusIcon size={12} color={task.status === "Completed" ? "var(--surface)" : "var(--text)"} style={{ flexShrink: 0 }} />
             <span
               style={{
                 fontSize: 10.5,
                 fontWeight: 600,
-                color: task.status === "Completed" ? "#F7F8FA" : "#20242B",
+                color: task.status === "Completed" ? "var(--surface)" : "var(--text)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -572,7 +572,7 @@ export function UnscheduledTaskCard({ task, onSelect }: { task: Task; onSelect: 
         height: 80,
         padding: 9,
         borderRadius: 14,
-        background: "#F7F8FA",
+        background: "var(--surface)",
         cursor: "pointer",
       }}
       title={`${task.title} · ${task.status} · ${task.project}`}
@@ -583,7 +583,7 @@ export function UnscheduledTaskCard({ task, onSelect }: { task: Task; onSelect: 
         style={{
           fontSize: 12.5,
           fontWeight: 650,
-          color: "#20242B",
+          color: "var(--text)",
           lineHeight: 1.35,
           overflow: "hidden",
           display: "-webkit-box",

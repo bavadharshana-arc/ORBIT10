@@ -65,11 +65,11 @@ export function toActor(member: Member): WorkspaceActor {
 
 export function resolveCurrentActor(members: Member[], authUser: AuthUser | null): WorkspaceActor {
   if (!authUser) {
-    return { id: "guest", name: "Guest", initials: "?", bg: "#AFC5DA", fg: "#20242B" };
+    return { id: "guest", name: "Guest", initials: "?", bg: "var(--blue)", fg: "var(--text)" };
   }
   const match = members.find((member) => member.email === authUser.email);
   if (match) return toActor(match);
-  return { id: authUser.id, name: authUser.name, initials: authUser.initials, bg: "#AFC5DA", fg: "#20242B" };
+  return { id: authUser.id, name: authUser.name, initials: authUser.initials, bg: "var(--blue)", fg: "var(--text)" };
 }
 
 

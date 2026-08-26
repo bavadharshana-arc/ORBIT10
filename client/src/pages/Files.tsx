@@ -83,7 +83,7 @@ interface FileRecord {
   uploadedAt: string; // "YYYY-MM-DD"
 }
 
-const NEUTRAL_UPLOADER_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+const NEUTRAL_UPLOADER_AVATAR = { bg: "var(--blue)", fg: "var(--text)" };
 
 /** Resolves a real uploaderId into a display FileUploader — same pattern as TaskContext.tsx's assignee resolution and ProjectFilesTab.tsx's resolveUploader. */
 function resolveUploader(

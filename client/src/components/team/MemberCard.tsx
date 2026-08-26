@@ -41,8 +41,8 @@ export function MemberCard({
         cursor: "pointer",
         position: "relative",
         minHeight: 250,
-        border: "1px solid #E4E8ED",
-        background: "#FFFFFF",
+        border: "1px solid var(--border)",
+        background: "var(--card)",
         boxShadow: "0 1px 3px rgba(32, 36, 43, 0.04)",
         transition: "all 0.2s ease",
       }}
@@ -118,7 +118,7 @@ export function MemberCard({
               height: 10,
               borderRadius: "50%",
               background: status.dot,
-              boxShadow: "0 0 0 2px #FFFFFF",
+              boxShadow: "0 0 0 2px var(--card)",
             }}
           />
         </div>
@@ -131,7 +131,7 @@ export function MemberCard({
               margin: 0,
               marginBottom: 3,
               lineHeight: 1.3,
-              color: "#20242B",
+              color: "var(--text)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -159,7 +159,7 @@ export function MemberCard({
       <div
         style={{
           height: 1,
-          background: "#EEF2F6",
+          background: "var(--surface-2)",
           width: "100%",
         }}
       />
@@ -186,8 +186,8 @@ export function MemberCard({
           fontSize: 11.5,
           padding: "10px 11px",
           borderRadius: 10,
-          background: "#F7F8FA",
-          border: "1px solid #EEF2F6",
+          background: "var(--surface)",
+          border: "1px solid var(--surface-2)",
         }}
       >
         <div
@@ -231,7 +231,7 @@ export function MemberCard({
         style={{
           marginTop: "auto",
           paddingTop: 12,
-          borderTop: "1px solid #EEF2F6",
+          borderTop: "1px solid var(--surface-2)",
         }}
       >
         <div>
@@ -240,7 +240,7 @@ export function MemberCard({
               margin: 0,
               fontSize: 14,
               fontWeight: 650,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             {member.tasksActive}
@@ -272,11 +272,11 @@ const iconButtonStyle: CSSProperties = {
   width: 27,
   height: 27,
   borderRadius: 8,
-  border: "1px solid #E4E8ED",
-  background: "#FFFFFF",
+  border: "1px solid var(--border)",
+  background: "var(--card)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  color: "#667085",
+  color: "var(--text-2)",
 };

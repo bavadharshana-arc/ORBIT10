@@ -13,7 +13,7 @@ import type { WorkspaceMemberRecord } from "../../lib/workspaceApi";
 import { Avatar } from "../ui/Avatar";
 import { ACTIVITY_META } from "./activityMeta";
 
-const NEUTRAL_ACTOR_AVATAR = { bg: "#AFC5DA", fg: "#20242B" };
+const NEUTRAL_ACTOR_AVATAR = { bg: "var(--blue)", fg: "var(--text)" };
 
 /** Resolves a real ActivityEventRecord's embedded actor (id/name/email only — no color) into a full display ActivityEvent, cross-referencing the workspace roster for avatar color — same pattern as every other real-actor resolution this session (TaskContext.tsx's resolveAssignee, ProjectFilesTab.tsx's resolveUploader). */
 function mapActivityRecord(record: ActivityEventRecord, membersById: Map<string, WorkspaceMemberRecord>): ActivityEvent {

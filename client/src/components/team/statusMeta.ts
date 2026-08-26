@@ -7,8 +7,8 @@ interface StatusMeta {
 }
 
 export const STATUS_META: Record<MemberStatus, StatusMeta> = {
-  Active: { tone: "blue", dot: "#8EA7BF" },
-  Away: { tone: "surface", dot: "#98A2B3" },
-  Offline: { tone: "surface", dot: "#E4E8ED" },
-  Invited: { tone: "dark", dot: "#20242B" },
+  Active: { tone: "blue", dot: "var(--blue-dark)" },
+  Away: { tone: "surface", dot: "var(--text-3)" },
+  Offline: { tone: "surface", dot: "var(--border)" },
+  Invited: { tone: "dark", dot: "var(--text)" },
 };

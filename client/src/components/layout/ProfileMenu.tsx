@@ -124,15 +124,15 @@ export function ProfileMenu() {
           gap: 10,
           padding: "6px 14px 6px 6px",
           borderRadius: 16,
-          border: "1px solid #E4E8ED",
+          border: "1px solid var(--border)",
           cursor: "pointer",
         }}
       >
-        <Avatar initials={displayInitials} bg="#AFC5DA" size={32} />
+        <Avatar initials={displayInitials} bg="var(--blue)" size={32} />
         <div style={{ lineHeight: 1.2 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{displayName}</div>
         </div>
-        <ChevronDown size={14} color="#98A2B3" />
+        <ChevronDown size={14} color="var(--text-3)" />
       </button>
 
       {isOpen &&

@@ -4,7 +4,7 @@ interface SparkleDoodleProps {
 }
 
 /** A thin, hand-drawn-feeling sparkle mark. Used next to AI-related copy. */
-export function SparkleDoodle({ size = 18, color = "#8EA7BF" }: SparkleDoodleProps) {
+export function SparkleDoodle({ size = 18, color = "var(--blue-dark)" }: SparkleDoodleProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path

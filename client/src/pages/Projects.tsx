@@ -205,7 +205,7 @@ function EmptyState({ title, message }: EmptyStateProps) {
       className="bg-card border-soft fade-in flex flex-col items-center"
       style={{ gridColumn: "1 / -1", borderRadius: 22, padding: "48px 24px", textAlign: "center", gap: 10 }}
     >
-      <FolderOpen size={26} strokeWidth={1.6} color="#98A2B3" />
+      <FolderOpen size={26} strokeWidth={1.6} color="var(--text-3)" />
       <p style={{ fontSize: 14, fontWeight: 600 }}>{title}</p>
       <p className="text-ink-3" style={{ fontSize: 12.5, maxWidth: 280 }}>
         {message}
@@ -562,8 +562,8 @@ export default function Projects() {
             className="lift"
             onClick={() => setIsCreateDrawerOpen(true)}
             style={{
-              background: "#20242B",
-              color: "#F7F8FA",
+              background: "var(--text)",
+              color: "var(--surface)",
               border: "none",
               borderRadius: 14,
               padding: "11px 18px",
@@ -602,7 +602,7 @@ export default function Projects() {
             maxWidth: 360,
           }}
         >
-          <Search size={16} strokeWidth={1.8} color="#98A2B3" />
+          <Search size={16} strokeWidth={1.8} color="var(--text-3)" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -613,7 +613,7 @@ export default function Projects() {
               background: "transparent",
               fontSize: 13.5,
               flex: 1,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           />
         </div>
@@ -635,8 +635,8 @@ export default function Projects() {
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
-                  background: isActive ? "#20242B" : "#EEF2F6",
-                  color: isActive ? "#F7F8FA" : "#667085",
+                  background: isActive ? "var(--text)" : "var(--surface-2)",
+                  color: isActive ? "var(--surface)" : "var(--text-2)",
                   transition: "background 160ms ease, color 160ms ease",
                 }}
               >

@@ -22,8 +22,8 @@ export function ActivityFeed({
       style={{
         borderRadius: 16,
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E4E8ED",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         boxShadow: "0 2px 8px rgba(32, 36, 43, 0.04)",
       }}
     >
@@ -41,7 +41,7 @@ export function ActivityFeed({
             width: 30,
             height: 30,
             borderRadius: 9,
-            background: "#EEF2F6",
+            background: "var(--surface-2)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -50,7 +50,7 @@ export function ActivityFeed({
         >
           <History
             size={15}
-            color="#8EA7BF"
+            color="var(--blue-dark)"
             strokeWidth={1.8}
           />
         </div>
@@ -63,7 +63,7 @@ export function ActivityFeed({
               display: "block",
               fontSize: 15,
               fontWeight: 600,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             Team Activity
@@ -74,7 +74,7 @@ export function ActivityFeed({
               display: "block",
               marginTop: 2,
               fontSize: 10.5,
-              color: "#98A2B3",
+              color: "var(--text-3)",
             }}
           >
             Recent team updates
@@ -84,27 +84,27 @@ export function ActivityFeed({
 
       {/* LOADING / ERROR / EMPTY STATE */}
       {isLoading ? (
-        <div style={{ padding: "24px 8px", textAlign: "center", background: "#F7F8FA", borderRadius: 11, border: "1px solid #EEF2F6" }}>
-          <span style={{ display: "block", fontSize: 11.5, color: "#98A2B3" }}>Loading activity…</span>
+        <div style={{ padding: "24px 8px", textAlign: "center", background: "var(--surface)", borderRadius: 11, border: "1px solid var(--surface-2)" }}>
+          <span style={{ display: "block", fontSize: 11.5, color: "var(--text-3)" }}>Loading activity…</span>
         </div>
       ) : error ? (
-        <div style={{ padding: "24px 8px", textAlign: "center", background: "#F7F8FA", borderRadius: 11, border: "1px solid #EEF2F6" }}>
+        <div style={{ padding: "24px 8px", textAlign: "center", background: "var(--surface)", borderRadius: 11, border: "1px solid var(--surface-2)" }}>
           <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#B3564B", marginBottom: 4 }}>Couldn't load activity</span>
-          <span style={{ display: "block", fontSize: 10.5, color: "#98A2B3" }}>{error}</span>
+          <span style={{ display: "block", fontSize: 10.5, color: "var(--text-3)" }}>{error}</span>
         </div>
       ) : activity.length === 0 ? (
         <div
           style={{
             padding: "24px 8px",
             textAlign: "center",
-            background: "#F7F8FA",
+            background: "var(--surface)",
             borderRadius: 11,
-            border: "1px solid #EEF2F6",
+            border: "1px solid var(--surface-2)",
           }}
         >
           <History
             size={20}
-            color="#98A2B3"
+            color="var(--text-3)"
             style={{
               margin: "0 auto 8px",
             }}
@@ -114,7 +114,7 @@ export function ActivityFeed({
             style={{
               display: "block",
               fontSize: 11.5,
-              color: "#98A2B3",
+              color: "var(--text-3)",
             }}
           >
             No recent activity
@@ -142,8 +142,8 @@ export function ActivityFeed({
                   gap: 10,
                   padding: 10,
                   borderRadius: 11,
-                  background: "#F7F8FA",
-                  border: "1px solid #EEF2F6",
+                  background: "var(--surface)",
+                  border: "1px solid var(--surface-2)",
                 }}
               >
                 {/* AVATAR */}
@@ -172,7 +172,7 @@ export function ActivityFeed({
                     style={{
                       margin: 0,
                       fontSize: 11.5,
-                      color: "#20242B",
+                      color: "var(--text)",
                       lineHeight: 1.5,
                     }}
                   >
@@ -184,7 +184,7 @@ export function ActivityFeed({
                       display: "block",
                       marginTop: 4,
                       fontSize: 10,
-                      color: "#98A2B3",
+                      color: "var(--text-3)",
                     }}
                   >
                     {entry.timestamp}

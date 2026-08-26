@@ -321,11 +321,11 @@ export function CreateTaskDrawer({
 
         <div className="flex items-center justify-between border-b border-soft px-6 py-5">
           <div>
-            <h2 className="font-display text-xl font-semibold text-[#20242B]">
+            <h2 className="font-display text-xl font-semibold text-[var(--text)]">
               Create Task
             </h2>
 
-            <p className="mt-1 text-xs text-[#667085]">
+            <p className="mt-1 text-xs text-[var(--text-2)]">
               Add a new task to your workspace.
             </p>
           </div>
@@ -334,7 +334,7 @@ export function CreateTaskDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F7F8FA] hover:text-[#20242B]"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
           >
             <X size={18} />
           </button>
@@ -358,7 +358,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                 Task title
               </label>
 
@@ -374,7 +374,7 @@ export function CreateTaskDrawer({
                   )
                 }
                 placeholder="What needs to be done?"
-                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
               />
             </div>
 
@@ -383,7 +383,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                 Description
               </label>
 
@@ -400,7 +400,7 @@ export function CreateTaskDrawer({
                 }
                 placeholder="Add some details..."
                 rows={4}
-                className="w-full resize-none rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[#20242B] outline-none transition placeholder:text-[#98A2B3] focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                className="w-full resize-none rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-3)] focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
               />
             </div>
 
@@ -409,7 +409,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                 Project
               </label>
 
@@ -423,7 +423,7 @@ export function CreateTaskDrawer({
                       event.target.value
                     )
                   }
-                  className="w-full appearance-none rounded-xl border border-soft bg-card px-3.5 py-3 pr-10 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                  className="w-full appearance-none rounded-xl border border-soft bg-card px-3.5 py-3 pr-10 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                 >
                   {projectOptions.map(
                     (
@@ -441,7 +441,7 @@ export function CreateTaskDrawer({
 
                 <ChevronDown
                   size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#667085]"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-2)]"
                 />
               </div>
             </div>
@@ -454,14 +454,14 @@ export function CreateTaskDrawer({
               {/* DUE DATE */}
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+                <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                   Due date
                 </label>
 
                 <div className="relative">
                   <CalendarDays
                     size={15}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#667085]"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-2)]"
                   />
 
                   <input
@@ -474,7 +474,7 @@ export function CreateTaskDrawer({
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                   />
                 </div>
               </div>
@@ -482,7 +482,7 @@ export function CreateTaskDrawer({
               {/* DUE TIME */}
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+                <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                   Due time
                 </label>
 
@@ -497,7 +497,7 @@ export function CreateTaskDrawer({
                     )
                   }
                   placeholder="e.g. 5:00 PM"
-                  className="w-full rounded-xl border border-soft bg-card px-3 py-3 text-sm text-[#20242B] outline-none transition placeholder:text-[#98A2B3] focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                  className="w-full rounded-xl border border-soft bg-card px-3 py-3 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-3)] focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                 />
               </div>
             </div>
@@ -507,7 +507,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                 Priority
               </label>
 
@@ -539,8 +539,8 @@ export function CreateTaskDrawer({
                         }
                         className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
                           selected
-                            ? "border-[#20242B] bg-[#20242B] text-white"
-                            : "border-soft bg-card text-[#667085] hover:bg-[#F7F8FA]"
+                            ? "border-[var(--text)] bg-[var(--text)] text-white"
+                            : "border-soft bg-card text-[var(--text-2)] hover:bg-[var(--surface)]"
                         }`}
                       >
                         {
@@ -558,7 +558,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">
                 Status
               </label>
 
@@ -573,7 +573,7 @@ export function CreateTaskDrawer({
                         .value as Status
                     )
                   }
-                  className="w-full appearance-none rounded-xl border border-soft bg-card px-3.5 py-3 pr-10 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                  className="w-full appearance-none rounded-xl border border-soft bg-card px-3.5 py-3 pr-10 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                 >
                   {statusOptions.map(
                     (
@@ -593,7 +593,7 @@ export function CreateTaskDrawer({
 
                 <ChevronDown
                   size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#667085]"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-2)]"
                 />
               </div>
             </div>
@@ -603,7 +603,7 @@ export function CreateTaskDrawer({
             ================================================== */}
 
             <div>
-              <label className="mb-2 block text-xs font-semibold text-[#20242B]">
+              <label className="mb-2 block text-xs font-semibold text-[var(--text)]">
                 {allowMultipleAssignees
                   ? "Assignees"
                   : "Assignee"}
@@ -612,7 +612,7 @@ export function CreateTaskDrawer({
               <div className="space-y-1.5">
                 {assigneeOptions.length ===
                 0 ? (
-                  <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
+                  <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[var(--text-3)]">
                     No team members available.
                   </p>
                 ) : (
@@ -638,13 +638,13 @@ export function CreateTaskDrawer({
                           }
                           className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                             selected
-                              ? "border-[#8EA7BF] bg-[#EEF2F6]"
-                              : "border-soft bg-card hover:bg-[#F7F8FA]"
+                              ? "border-[var(--blue-dark)] bg-[var(--surface-2)]"
+                              : "border-soft bg-card hover:bg-[var(--surface)]"
                           }`}
                         >
                           {/* AVATAR */}
 
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E4E8ED] text-[10px] font-semibold text-[#20242B]">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--border)] text-[10px] font-semibold text-[var(--text)]">
                             {
                               option
                                 .member
@@ -655,13 +655,13 @@ export function CreateTaskDrawer({
                           {/* USER INFO */}
 
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-semibold text-[#20242B]">
+                            <span className="block truncate text-xs font-semibold text-[var(--text)]">
                               {
                                 option.label
                               }
                             </span>
 
-                            <span className="block truncate text-[10px] text-[#98A2B3]">
+                            <span className="block truncate text-[10px] text-[var(--text-3)]">
                               {
                                 option
                                   .member
@@ -673,7 +673,7 @@ export function CreateTaskDrawer({
                           {/* CHECK */}
 
                           {selected && (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#20242B] text-white">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--text)] text-white">
                               <Check
                                 size={12}
                               />
@@ -696,14 +696,14 @@ export function CreateTaskDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[#667085] transition hover:bg-[#F7F8FA] hover:text-[#20242B]"
+              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[var(--text-2)] transition hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="rounded-xl bg-[#20242B] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
+              className="rounded-xl bg-[var(--text)] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
             >
               Create Task
             </button>

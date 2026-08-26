@@ -171,7 +171,7 @@ export function ActivityChart({ data, createdThisWeek, completedThisWeek, change
               ))}
             </svg>
 
-            <TinySparkle style={{ left: "48%", top: "46%" }} size={9} color="#FFFFFF" opacity={0.55} />
+            <TinySparkle style={{ left: "48%", top: "46%" }} size={9} color="var(--card)" opacity={0.55} />
 
             <div
               className="flex items-center justify-center"

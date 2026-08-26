@@ -51,12 +51,12 @@ export function MemberRow({ member, canManage, onSelect, onRemove }: MemberRowPr
               height: 9,
               borderRadius: "50%",
               background: status.dot,
-              boxShadow: "0 0 0 2px #FFFFFF",
+              boxShadow: "0 0 0 2px var(--card)",
             }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 650, color: "#20242B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 650, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {member.name}
           </div>
           <div className="flex items-center text-ink-3" style={{ gap: 5, fontSize: 11.5 }}>
@@ -136,10 +136,10 @@ const iconButtonStyle = {
   height: 28,
   borderRadius: 8,
   border: "none",
-  background: "#F7F8FA",
+  background: "var(--surface)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  color: "#667085",
+  color: "var(--text-2)",
 } as const;

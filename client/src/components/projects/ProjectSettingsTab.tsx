@@ -72,7 +72,7 @@ export function ProjectSettingsTab() {
                     className="flex items-center justify-center"
                     style={{ width: 30, height: 30, borderRadius: "50%", background: option.value, border: "none", cursor: canManage ? "pointer" : "default", boxShadow: selected ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--blue-dark)" : "none" }}
                   >
-                    {selected && <Check size={13} color="#FFFFFF" />}
+                    {selected && <Check size={13} color="var(--card)" />}
                   </button>
                 );
               })}

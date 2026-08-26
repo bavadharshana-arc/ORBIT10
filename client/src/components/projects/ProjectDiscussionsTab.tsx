@@ -523,7 +523,7 @@ function DiscussionCard({ discussion, actorNames, currentActor, canComment, canP
    doesn't get re-fetched just to pick up its own attachments.
 ============================================================ */
 
-const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+const NEUTRAL_AVATAR = { bg: "var(--surface-2)", fg: "var(--text)" };
 
 function resolveActor(
   id: string,
@@ -609,8 +609,8 @@ export function ProjectDiscussionsTab() {
           id: record.userId,
           name,
           initials: getInitials(name),
-          bg: record.user.avatarBg ?? "#AFC5DA",
-          fg: record.user.avatarFg ?? "#20242B",
+          bg: record.user.avatarBg ?? "var(--blue)",
+          fg: record.user.avatarFg ?? "var(--text)",
         };
       }),
     [projectMembers],

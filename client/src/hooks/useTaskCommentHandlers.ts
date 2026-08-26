@@ -70,7 +70,7 @@ interface TaskCommentHandlers {
   commentsError: string | null;
 }
 
-const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+const NEUTRAL_AVATAR = { bg: "var(--surface-2)", fg: "var(--text)" };
 
 function resolveAuthor(
   authorId: string,

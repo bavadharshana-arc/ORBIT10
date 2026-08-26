@@ -13,8 +13,8 @@ interface AvatarProps {
  */
 export function Avatar({
   initials,
-  bg = "#E9EDF2",
-  fg = "#20242B",
+  bg = "var(--surface-2)",
+  fg = "var(--text)",
   size = 32,
   ring = false,
 }: AvatarProps) {
@@ -33,7 +33,7 @@ export function Avatar({
         fontSize: size * 0.36,
         fontWeight: 560,
         boxShadow: ring
-          ? "0 0 0 2.5px #F7F8FA"
+          ? "0 0 0 2.5px var(--surface)"
           : "none",
         flexShrink: 0,
       }}

@@ -150,8 +150,8 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
         name: record.user.name ?? record.user.email,
         jobTitle: record.user.jobTitle ?? "Team member",
         initials: getInitials(record.user.name ?? record.user.email),
-        bg: record.user.avatarBg ?? "#AFC5DA",
-        fg: record.user.avatarFg ?? "#20242B",
+        bg: record.user.avatarBg ?? "var(--blue)",
+        fg: record.user.avatarFg ?? "var(--text)",
       })),
     [workspaceMembers],
   );
@@ -176,8 +176,8 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
         {/* HEADER */}
         <div className="flex items-center justify-between border-b border-soft px-6 py-5">
           <div>
-            <h2 className="font-display text-xl font-semibold text-[#20242B]">{isEditMode ? "Edit Project" : "Create Project"}</h2>
-            <p className="mt-1 text-xs text-[#667085]">
+            <h2 className="font-display text-xl font-semibold text-[var(--text)]">{isEditMode ? "Edit Project" : "Create Project"}</h2>
+            <p className="mt-1 text-xs text-[var(--text-2)]">
               {isEditMode ? "Update this project's details." : "Start a new initiative in your workspace."}
             </p>
           </div>
@@ -185,7 +185,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F7F8FA] hover:text-[#20242B]"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
           >
             <X size={18} />
           </button>
@@ -196,32 +196,32 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             {/* NAME */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Project name</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Project name</label>
               <input
                 autoFocus
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. Orbit Mobile App"
-                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
               />
             </div>
 
             {/* DESCRIPTION */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Description</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Description</label>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="What is this project about?"
                 rows={4}
-                className="w-full resize-none rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[#20242B] outline-none transition placeholder:text-[#98A2B3] focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                className="w-full resize-none rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-3)] focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
               />
             </div>
 
             {/* CATEGORY */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Category</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Category</label>
               <div className="grid grid-cols-3 gap-2">
                 {PROJECT_TAGS.map((option) => {
                   const selected = tag === option;
@@ -231,7 +231,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
                       type="button"
                       onClick={() => setTag(option)}
                       className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
-                        selected ? "border-[#20242B] bg-[#20242B] text-white" : "border-soft bg-card text-[#667085] hover:bg-[#F7F8FA]"
+                        selected ? "border-[var(--text)] bg-[var(--text)] text-white" : "border-soft bg-card text-[var(--text-2)] hover:bg-[var(--surface)]"
                       }`}
                     >
                       {option}
@@ -243,7 +243,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
 
             {/* COLOR */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Color</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Color</label>
               <div className="flex flex-wrap gap-2">
                 {PROJECT_COLORS.map((option) => {
                   const selected = color === option.value;
@@ -257,10 +257,10 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
                       className="flex h-8 w-8 items-center justify-center rounded-full transition"
                       style={{
                         background: option.value,
-                        boxShadow: selected ? "0 0 0 2px #FFFFFF, 0 0 0 3.5px #8EA7BF" : "none",
+                        boxShadow: selected ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--blue-dark)" : "none",
                       }}
                     >
-                      {selected && <Check size={13} color="#FFFFFF" />}
+                      {selected && <Check size={13} color="var(--card)" />}
                     </button>
                   );
                 })}
@@ -270,27 +270,27 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
             {/* DATES */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Start date</label>
+                <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Start date</label>
                 <div className="relative">
-                  <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#667085]" />
+                  <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-2)]" />
                   <input
                     type="date"
                     value={startDate}
                     onChange={(event) => setStartDate(event.target.value)}
-                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Due date</label>
+                <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Due date</label>
                 <div className="relative">
-                  <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#667085]" />
+                  <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-2)]" />
                   <input
                     type="date"
                     value={dueDate}
                     onChange={(event) => setDueDate(event.target.value)}
-                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                    className="w-full rounded-xl border border-soft bg-card px-3 py-3 pl-9 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
                   />
                 </div>
               </div>
@@ -301,10 +301,10 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
                 drawer doesn't offer a second way to change it. */}
             {!isEditMode && (
               <div>
-                <label className="mb-2 block text-xs font-semibold text-[#20242B]">Team members</label>
+                <label className="mb-2 block text-xs font-semibold text-[var(--text)]">Team members</label>
                 <div className="space-y-1.5">
                   {memberCandidates.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
+                    <p className="rounded-xl border border-dashed border-soft px-3 py-4 text-center text-xs text-[var(--text-3)]">
                       No other workspace members to add yet.
                     </p>
                   ) : (
@@ -316,7 +316,7 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
                           type="button"
                           onClick={() => handleMemberToggle(member.userId)}
                           className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                            selected ? "border-[#8EA7BF] bg-[#EEF2F6]" : "border-soft bg-card hover:bg-[#F7F8FA]"
+                            selected ? "border-[var(--blue-dark)] bg-[var(--surface-2)]" : "border-soft bg-card hover:bg-[var(--surface)]"
                           }`}
                         >
                           <span
@@ -327,12 +327,12 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
                           </span>
 
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-semibold text-[#20242B]">{member.name}</span>
-                            <span className="block truncate text-[10px] text-[#98A2B3]">{member.jobTitle}</span>
+                            <span className="block truncate text-xs font-semibold text-[var(--text)]">{member.name}</span>
+                            <span className="block truncate text-[10px] text-[var(--text-3)]">{member.jobTitle}</span>
                           </span>
 
                           {selected && (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#20242B] text-white">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--text)] text-white">
                               <Check size={12} />
                             </span>
                           )}
@@ -350,11 +350,11 @@ export function CreateProjectDrawer({ isOpen, onClose, onCreate, project, onUpda
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[#667085] transition hover:bg-[#F7F8FA] hover:text-[#20242B]"
+              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[var(--text-2)] transition hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
               Cancel
             </button>
-            <button type="submit" className="rounded-xl bg-[#20242B] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90">
+            <button type="submit" className="rounded-xl bg-[var(--text)] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90">
               {isEditMode ? "Save Changes" : "Create Project"}
             </button>
           </div>

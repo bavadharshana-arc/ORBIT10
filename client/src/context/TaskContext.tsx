@@ -38,7 +38,7 @@ function clampPriority(value: string | null): Priority {
   return "High";
 }
 
-const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+const NEUTRAL_AVATAR = { bg: "var(--surface-2)", fg: "var(--text)" };
 
 function resolveAssignee(
   assigneeId: string | null,

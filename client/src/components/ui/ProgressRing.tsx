@@ -12,8 +12,8 @@ export function ProgressRing({
   value,
   size = 56,
   stroke = 5,
-  color = "#8EA7BF",
-  track = "#E9EDF2",
+  color = "var(--blue-dark)",
+  track = "var(--surface-2)",
   label,
 }: ProgressRingProps) {
   const r = (size - stroke) / 2;

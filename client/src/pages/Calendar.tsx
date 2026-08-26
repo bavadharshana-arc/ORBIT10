@@ -130,26 +130,26 @@ const EVENT_META: Record<
 > = {
   task: {
     label: "Task",
-    dot: "bg-[#8EA7BF]",
-    pill: "bg-[#EEF2F6] text-[#20242B]",
+    dot: "bg-[var(--blue-dark)]",
+    pill: "bg-[var(--surface-2)] text-[var(--text)]",
     icon: CheckCircle2,
   },
   meeting: {
     label: "Meeting",
-    dot: "bg-[#AFC5DA]",
-    pill: "bg-[#EEF2F6] text-[#20242B]",
+    dot: "bg-[var(--blue)]",
+    pill: "bg-[var(--surface-2)] text-[var(--text)]",
     icon: Users,
   },
   deadline: {
     label: "Deadline",
-    dot: "bg-[#667085]",
-    pill: "bg-[#E4E8ED] text-[#20242B]",
+    dot: "bg-[var(--text-2)]",
+    pill: "bg-[var(--border)] text-[var(--text)]",
     icon: Flag,
   },
   milestone: {
     label: "Milestone",
-    dot: "bg-[#20242B]",
-    pill: "bg-[#E4E8ED] text-[#20242B]",
+    dot: "bg-[var(--text)]",
+    pill: "bg-[var(--border)] text-[var(--text)]",
     icon: Milestone,
   },
 };
@@ -182,14 +182,14 @@ function EventDetailRow({ event }: { event: CalendarEvent }) {
         <Icon className="h-3.5 w-3.5" strokeWidth={2} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-[#20242B]">
+        <p className="truncate text-sm font-medium text-[var(--text)]">
           {event.title}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#667085]">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-2)]">
           <span>{meta.label}</span>
           {event.time && (
             <>
-              <span className="text-[#98A2B3]">·</span>
+              <span className="text-[var(--text-3)]">·</span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {event.time}
@@ -198,7 +198,7 @@ function EventDetailRow({ event }: { event: CalendarEvent }) {
           )}
           {event.project && (
             <>
-              <span className="text-[#98A2B3]">·</span>
+              <span className="text-[var(--text-3)]">·</span>
               <span className="truncate">{event.project}</span>
             </>
           )}
@@ -217,7 +217,7 @@ function CreateScheduleButton() {
     <button
       type="button"
       title="Event creation isn't wired up yet"
-      className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#20242B] px-3 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--text)] px-3 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
     >
       <Plus className="h-4 w-4" />
       Create Schedule
@@ -253,7 +253,7 @@ function MiniCalendar({
   return (
     <div className="rounded-xl border border-soft bg-card p-3 shadow-float">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold text-[#20242B]">
+        <span className="text-xs font-semibold text-[var(--text)]">
           {monthLabel}
         </span>
         <div className="flex items-center gap-0.5">
@@ -261,7 +261,7 @@ function MiniCalendar({
             type="button"
             onClick={onPrevMonth}
             aria-label="Previous month"
-            className="flex h-5 w-5 items-center justify-center rounded text-[#667085] hover:bg-surface hover:text-[#20242B]"
+            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-2)] hover:bg-surface hover:text-[var(--text)]"
           >
             <ChevronLeft className="h-3 w-3" />
           </button>
@@ -269,7 +269,7 @@ function MiniCalendar({
             type="button"
             onClick={onNextMonth}
             aria-label="Next month"
-            className="flex h-5 w-5 items-center justify-center rounded text-[#667085] hover:bg-surface hover:text-[#20242B]"
+            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-2)] hover:bg-surface hover:text-[var(--text)]"
           >
             <ChevronRight className="h-3 w-3" />
           </button>
@@ -280,7 +280,7 @@ function MiniCalendar({
         {WEEKDAY_LABELS_MINI.map((label, i) => (
           <div
             key={`${label}-${i}`}
-            className="flex h-6 items-center justify-center text-[10px] font-medium text-[#98A2B3]"
+            className="flex h-6 items-center justify-center text-[10px] font-medium text-[var(--text-3)]"
           >
             {label}
           </div>
@@ -304,12 +304,12 @@ function MiniCalendar({
                     onClick={() => onSelectDate(date)}
                     className={`flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
                       isToday
-                        ? "bg-[#20242B] text-white"
+                        ? "bg-[var(--text)] text-white"
                         : isSelected
-                        ? "bg-[#EEF2F6] text-[#20242B] ring-1 ring-inset ring-[#8EA7BF]"
+                        ? "bg-[var(--surface-2)] text-[var(--text)] ring-1 ring-inset ring-[var(--blue-dark)]"
                         : isCurrentMonth
-                        ? "text-[#20242B] hover:bg-surface"
-                        : "text-[#98A2B3] hover:bg-surface"
+                        ? "text-[var(--text)] hover:bg-surface"
+                        : "text-[var(--text-3)] hover:bg-surface"
                     }`}
                   >
                     {date.getDate()}
@@ -334,14 +334,14 @@ function MiniCalendar({
 const SUMMARY_TYPES: readonly EventType[] = ["task", "meeting", "deadline"];
 
 /** Same literal per-type accents as EVENT_META's own `dot` background
- * colors above (task #8EA7BF, meeting #AFC5DA, deadline #667085) — just
+ * colors above (task var(--blue-dark), meeting var(--blue), deadline var(--text-2)) — just
  * applied as an icon stroke color instead of a filled dot, so the chips
  * carry no colors that don't already exist elsewhere on this page. */
 const SUMMARY_ICON_COLOR: Record<EventType, string> = {
-  task: "text-[#8EA7BF]",
-  meeting: "text-[#AFC5DA]",
-  deadline: "text-[#667085]",
-  milestone: "text-[#20242B]",
+  task: "text-[var(--blue-dark)]",
+  meeting: "text-[var(--blue)]",
+  deadline: "text-[var(--text-2)]",
+  milestone: "text-[var(--text)]",
 };
 
 /** "3 Tasks" / "1 Meeting" / "0 Deadlines" — EVENT_META's label is always
@@ -387,7 +387,7 @@ function SelectedDaySummary({ events }: { events: CalendarEvent[] }) {
             className="flex min-w-0 shrink items-center gap-1 rounded-lg border border-soft bg-surface px-1 py-1"
           >
             <Icon className={`h-2.5 w-2.5 shrink-0 ${SUMMARY_ICON_COLOR[type]}`} strokeWidth={2.25} />
-            <span className="min-w-0 truncate whitespace-nowrap text-[10px] font-medium text-[#667085]">
+            <span className="min-w-0 truncate whitespace-nowrap text-[10px] font-medium text-[var(--text-2)]">
               {formatSummaryLabel(type, count)}
             </span>
           </div>
@@ -407,12 +407,12 @@ function SelectedDayPanel({
   return (
     <div className="rounded-xl border border-soft bg-card p-3 shadow-float">
       <div className="flex items-center gap-2">
-        <CalendarIcon className="h-3.5 w-3.5 text-[#8EA7BF]" />
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[#667085]">
+        <CalendarIcon className="h-3.5 w-3.5 text-[var(--blue-dark)]" />
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-2)]">
           Selected Day
         </h2>
       </div>
-      <p className="mt-1 text-sm font-semibold text-[#20242B]">
+      <p className="mt-1 text-sm font-semibold text-[var(--text)]">
         {formatLongDate(date)}
       </p>
 
@@ -420,7 +420,7 @@ function SelectedDayPanel({
 
       <div className="mt-3 flex flex-col gap-2 border-t border-soft pt-3">
         {events.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-soft px-3 py-4 text-center text-xs text-[#98A2B3]">
+          <p className="rounded-lg border border-dashed border-soft px-3 py-4 text-center text-xs text-[var(--text-3)]">
             No events scheduled for this day.
           </p>
         ) : (
@@ -462,24 +462,24 @@ function PeopleList({
 
   return (
     <div className="rounded-xl border border-soft bg-card p-3 shadow-float">
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#667085]">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-2)]">
         People
       </h2>
 
       <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#98A2B3]" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-3)]" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search for people"
-          className="w-full rounded-lg border border-soft bg-surface py-1.5 pl-8 pr-3 text-xs text-[#20242B] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#AFC5DA]"
+          className="w-full rounded-lg border border-soft bg-surface py-1.5 pl-8 pr-3 text-xs text-[var(--text)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]"
         />
       </div>
 
       <div className="flex flex-col gap-1">
         {filteredPeople.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-[#98A2B3]">No people found.</p>
+          <p className="px-1 py-2 text-xs text-[var(--text-3)]">No people found.</p>
         ) : (
           filteredPeople.map((person) => {
             const isSelected = person.id === selectedPersonId;
@@ -489,17 +489,17 @@ function PeopleList({
                 type="button"
                 onClick={() => onSelectPerson(person.id)}
                 className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
-                  isSelected ? "bg-[#EEF2F6]" : "hover:bg-surface"
+                  isSelected ? "bg-[var(--surface-2)]" : "hover:bg-surface"
                 }`}
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E4E8ED] text-[10px] font-semibold text-[#20242B]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--border)] text-[10px] font-semibold text-[var(--text)]">
                   {person.initials}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-[#20242B]">
+                  <span className="block truncate text-xs font-medium text-[var(--text)]">
                     {person.name}
                   </span>
-                  <span className="block truncate text-[10px] text-[#98A2B3]">
+                  <span className="block truncate text-[10px] text-[var(--text-3)]">
                     {person.email}
                   </span>
                 </span>
@@ -514,8 +514,8 @@ function PeopleList({
         onClick={onResetToMySchedule}
         className={`mt-3 w-full rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
           selectedPersonId === null
-            ? "border-[#8EA7BF] bg-[#EEF2F6] text-[#20242B]"
-            : "border-soft text-[#667085] hover:bg-surface"
+            ? "border-[var(--blue-dark)] bg-[var(--surface-2)] text-[var(--text)]"
+            : "border-soft text-[var(--text-2)] hover:bg-surface"
         }`}
       >
         My Schedule
@@ -555,7 +555,7 @@ function CalendarToolbar({
         <button
           type="button"
           onClick={onToday}
-          className="rounded-lg border border-soft px-3 py-1.5 text-sm font-medium text-[#20242B] transition-colors hover:bg-surface"
+          className="rounded-lg border border-soft px-3 py-1.5 text-sm font-medium text-[var(--text)] transition-colors hover:bg-surface"
         >
           Today
         </button>
@@ -564,7 +564,7 @@ function CalendarToolbar({
             type="button"
             onClick={onPrevMonth}
             aria-label="Previous month"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-surface hover:text-[#20242B]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-surface hover:text-[var(--text)]"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -572,25 +572,25 @@ function CalendarToolbar({
             type="button"
             onClick={onNextMonth}
             aria-label="Next month"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-surface hover:text-[#20242B]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-surface hover:text-[var(--text)]"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <span className="font-display text-base font-semibold text-[#20242B] sm:text-lg">
+        <span className="font-display text-base font-semibold text-[var(--text)] sm:text-lg">
           {monthLabel}
         </span>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#98A2B3]" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-3)]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search events"
-            className="w-full rounded-lg border border-soft bg-surface py-1.5 pl-8 pr-3 text-sm text-[#20242B] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#AFC5DA] sm:w-48"
+            className="w-full rounded-lg border border-soft bg-surface py-1.5 pl-8 pr-3 text-sm text-[var(--text)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)] sm:w-48"
           />
         </div>
 
@@ -607,15 +607,15 @@ function CalendarToolbar({
                 title={isDisabled ? "Coming soon" : undefined}
                 className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
                   isActive
-                    ? "bg-card text-[#20242B] shadow-float"
+                    ? "bg-card text-[var(--text)] shadow-float"
                     : isDisabled
-                    ? "cursor-not-allowed text-[#98A2B3]"
-                    : "text-[#667085] hover:text-[#20242B]"
+                    ? "cursor-not-allowed text-[var(--text-3)]"
+                    : "text-[var(--text-2)] hover:text-[var(--text)]"
                 }`}
               >
                 {mode}
                 {isDisabled && (
-                  <span className="ml-1 text-[9px] uppercase tracking-wide text-[#98A2B3]">
+                  <span className="ml-1 text-[9px] uppercase tracking-wide text-[var(--text-3)]">
                     soon
                   </span>
                 )}
@@ -657,16 +657,16 @@ function CalendarDayCell({
       type="button"
       onClick={() => onSelect(date)}
       className={`group flex min-h-23 flex-col items-stretch gap-1 border-b border-r border-soft p-1.5 text-left transition-colors last:border-r-0 hover:bg-surface sm:min-h-30 sm:p-2 ${
-        isSelected ? "bg-[#EEF2F6]" : "bg-card"
+        isSelected ? "bg-[var(--surface-2)]" : "bg-card"
       } ${!isCurrentMonth ? "opacity-45" : ""}`}
     >
       <span
         className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium sm:h-7 sm:w-7 sm:text-sm ${
           isToday
-            ? "bg-[#20242B] text-white"
+            ? "bg-[var(--text)] text-white"
             : isSelected
-            ? "border border-[#8EA7BF] text-[#20242B]"
-            : "text-[#20242B]"
+            ? "border border-[var(--blue-dark)] text-[var(--text)]"
+            : "text-[var(--text)]"
         }`}
       >
         {date.getDate()}
@@ -677,7 +677,7 @@ function CalendarDayCell({
           <EventPill key={event.id} event={event} />
         ))}
         {overflowCount > 0 && (
-          <span className="px-1 text-[10px] font-medium text-[#667085]">
+          <span className="px-1 text-[10px] font-medium text-[var(--text-2)]">
             +{overflowCount} more
           </span>
         )}
@@ -709,7 +709,7 @@ function CalendarGrid({
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
-            className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-[#667085] sm:text-xs"
+            className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-[var(--text-2)] sm:text-xs"
           >
             {label}
           </div>
@@ -923,10 +923,10 @@ export default function Calendar() {
       {/* Main calendar workspace */}
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-[#20242B]">
+          <h1 className="font-display text-2xl font-semibold text-[var(--text)]">
             Calendar
           </h1>
-          <p className="mt-1 text-sm text-[#667085]">
+          <p className="mt-1 text-sm text-[var(--text-2)]">
             Stay on top of deadlines, meetings, and upcoming work.
           </p>
         </div>

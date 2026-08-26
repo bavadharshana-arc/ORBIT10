@@ -204,7 +204,7 @@ const iconBtn = {
   flexShrink: 0,
 } as const;
 
-const NEUTRAL_AVATAR = { bg: "#E9EDF2", fg: "#20242B" };
+const NEUTRAL_AVATAR = { bg: "var(--surface-2)", fg: "var(--text)" };
 
 /** Resolves a real uploaderId into a WorkspaceActor (real name/initials/avatar) — same pattern as TaskContext.tsx's assignee resolution (Phase 26) and useTaskCommentHandlers.ts's comment authors (Phase 27). */
 function resolveUploader(

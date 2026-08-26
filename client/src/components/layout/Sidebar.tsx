@@ -31,16 +31,16 @@ const ROUTES: Record<string, string> = {
 };
 
 const activeNavStyle: CSSProperties = {
-  background: "#FFFFFF",
+  background: "var(--card)",
   boxShadow: "0 1px 2px rgba(32,36,43,0.04), 0 8px 20px -10px rgba(32,36,43,0.16)",
-  color: "#20242B",
+  color: "var(--text)",
   fontWeight: 600,
 };
 
 const inactiveNavStyle: CSSProperties = {
   background: "transparent",
   boxShadow: "none",
-  color: "#667085",
+  color: "var(--text-2)",
   fontWeight: 500,
 };
 
@@ -220,14 +220,14 @@ export function Sidebar({ items, isOpen, onClose }: SidebarProps) {
               textAlign: "left",
             }}
           >
-            <Avatar initials={displayInitials} bg="#AFC5DA" size={34} />
+            <Avatar initials={displayInitials} bg="var(--blue)" size={34} />
             <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{displayName}</div>
               <div className="text-ink-3" style={{ fontSize: 11.5 }}>
                 {displayRole}
               </div>
             </div>
-            <LogOut size={15} strokeWidth={1.7} color="#98A2B3" />
+            <LogOut size={15} strokeWidth={1.7} color="var(--text-3)" />
           </button>
         </div>
       </div>

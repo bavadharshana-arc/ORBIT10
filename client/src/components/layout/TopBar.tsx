@@ -23,11 +23,11 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           borderRadius: 14,
           alignItems: "center",
           justifyContent: "center",
-          border: "1px solid #E4E8ED",
+          border: "1px solid var(--border)",
           cursor: "pointer",
         }}
       >
-        <Menu size={18} strokeWidth={1.8} color="#20242B" />
+        <Menu size={18} strokeWidth={1.8} color="var(--text)" />
       </button>
 
       <div className="flex items-center" style={{ gap: 12 }}>

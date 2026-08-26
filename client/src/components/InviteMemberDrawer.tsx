@@ -112,8 +112,8 @@ export function InviteMemberDrawer({ isOpen, onClose, onInvite, canGrantOwner }:
         {/* HEADER */}
         <div className="flex items-center justify-between border-b border-soft px-6 py-5">
           <div>
-            <h2 className="font-display text-xl font-semibold text-[#20242B]">Add Member</h2>
-            <p className="mt-1 text-xs text-[#667085]">
+            <h2 className="font-display text-xl font-semibold text-[var(--text)]">Add Member</h2>
+            <p className="mt-1 text-xs text-[var(--text-2)]">
               Add an existing ORBIT account to this workspace by email. They'll need to have already signed up.
             </p>
           </div>
@@ -122,7 +122,7 @@ export function InviteMemberDrawer({ isOpen, onClose, onInvite, canGrantOwner }:
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-[#F7F8FA] hover:text-[#20242B]"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
           >
             <X size={18} />
           </button>
@@ -133,20 +133,20 @@ export function InviteMemberDrawer({ isOpen, onClose, onInvite, canGrantOwner }:
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             {/* EMAIL */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Email</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Email</label>
               <input
                 autoFocus
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="jordan@orbit.io"
-                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[#20242B] outline-none transition focus:border-[#8EA7BF] focus:ring-2 focus:ring-[#EEF2F6]"
+                className="w-full rounded-xl border border-soft bg-card px-3.5 py-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--blue-dark)] focus:ring-2 focus:ring-[var(--surface-2)]"
               />
             </div>
 
             {/* ROLE */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[#20242B]">Role</label>
+              <label className="mb-1.5 block text-xs font-semibold text-[var(--text)]">Role</label>
               <div className="grid grid-cols-3 gap-2">
                 {roleOptions.map((option) => {
                   const selected = role === option;
@@ -158,8 +158,8 @@ export function InviteMemberDrawer({ isOpen, onClose, onInvite, canGrantOwner }:
                       onClick={() => setRole(option)}
                       className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
                         selected
-                          ? "border-[#20242B] bg-[#20242B] text-white"
-                          : "border-soft bg-card text-[#667085] hover:bg-[#F7F8FA]"
+                          ? "border-[var(--text)] bg-[var(--text)] text-white"
+                          : "border-soft bg-card text-[var(--text-2)] hover:bg-[var(--surface)]"
                       }`}
                     >
                       {ROLE_LABEL[option]}
@@ -175,14 +175,14 @@ export function InviteMemberDrawer({ isOpen, onClose, onInvite, canGrantOwner }:
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[#667085] transition hover:bg-[#F7F8FA] hover:text-[#20242B]"
+              className="rounded-xl border border-soft px-4 py-2.5 text-xs font-semibold text-[var(--text-2)] transition hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="rounded-xl bg-[#20242B] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
+              className="rounded-xl bg-[var(--text)] px-5 py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
             >
               Add Member
             </button>
