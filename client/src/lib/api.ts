@@ -13,12 +13,20 @@ export const API_BASE_URL: string =
 
 /** Where the frontend stores the Bearer token. Phase 18–22 only ever read
  *  this (AuthContext was mock/local, so nothing wrote it). Phase 23 is the
- *  first to write/clear it, from AuthContext's real login/register/logout. */
+ *  first to write/clear it, from AuthContext's real login/register/logout.
+ *
+ *  Deliberately sessionStorage, not localStorage: localStorage persists
+ *  indefinitely across browser restarts, which was silently auto-restoring
+ *  the signed-in user (and bouncing straight to /dashboard) on every
+ *  reopen of the app. sessionStorage survives refreshes/navigation within
+ *  the same tab session (so "stay logged in while using the app" still
+ *  works) but is cleared when the browser/tab closes, so a fresh app
+ *  session always lands on /login. */
 const AUTH_TOKEN_KEY = "orbit-auth-token";
 
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem(AUTH_TOKEN_KEY);
+    return sessionStorage.getItem(AUTH_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -26,7 +34,7 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string): void {
   try {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    sessionStorage.setItem(AUTH_TOKEN_KEY, token);
   } catch {
     // Storage unavailable (e.g. private browsing) — the session simply
     // won't survive a refresh; nothing else to do here.
@@ -35,7 +43,7 @@ export function setAuthToken(token: string): void {
 
 export function clearAuthToken(): void {
   try {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
   } catch {
     // See setAuthToken — nothing to do if storage itself is unavailable.
   }
