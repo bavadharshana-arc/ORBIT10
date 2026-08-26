@@ -5,13 +5,19 @@ import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../lib/api";
 
-/* Fixed brand colors for the primary button and "Sign up" link —
-   originally chosen to match the now-removed welcome-panel artwork's
-   ivory-and-indigo palette, kept literal (not theme tokens) so the
-   login page's identity stays consistent in both light and dark app
-   appearance settings. reference/orbit-login.jpe itself is still used
-   by Register.tsx/ForgotPassword.tsx/ResetPassword.tsx — not deleted. */
-const INK = "#2E4066"; // deep indigo — primary button
+/* The illustrated panel uses the actual reference/orbit-login.jpe artwork
+   (not a CSS/SVG recreation) — resolved to a built URL via `new URL(...,
+   import.meta.url)` so Vite serves/bundles it without needing an import
+   declaration for its non-standard ".jpe" extension. */
+const orbitLoginImage = new URL("../../reference/orbit-login.jpe", import.meta.url).href;
+
+/* Fixed brand colors for the welcome-panel overlay text and primary
+   button — these mirror reference/orbit-login.jpe's pale ivory-blue
+   watercolor palette (a Chinese-painting-style pagoda rendered in
+   layered indigo and powder blues against cream) and intentionally
+   stay literal (not theme tokens) so the login page keeps its
+   identity in both light and dark app appearance settings. */
+const INK = "#2E4066"; // deep indigo — overlay text, primary button
 const INK_DEEP = "#1E2C4A"; // darker indigo — button gradient
 const LINK_BLUE = "#3D5C99";
 
@@ -96,19 +102,57 @@ export default function Login() {
       </svg>
       <div className="paper-texture" style={{ filter: "url(#paperNoise)" }} />
 
-      <div className="fade-in" style={{ width: "100%", maxWidth: 440, position: "relative" }}>
-        {/* CARD — a single centered form panel. Previously split into an
-            illustrated welcome panel (desktop/tablet) alongside this form
-            panel; the welcome panel was removed at the image's exclusive
-            usage site (this page only — see the note above INK). maxWidth
-            above is unchanged from what this form panel's own box was
-            before (800 total minus the welcome panel's 45% share), so the
-            field/button widths and proportions are exactly as they were,
-            just without a second panel beside them. */}
+      <div className="fade-in" style={{ width: "100%", maxWidth: 800, position: "relative" }}>
+        {/* CARD — split into an illustrated welcome panel (desktop/tablet
+            only) and the form panel, matching the "Modern Login Screen
+            UI/UX" layout reference: a centered rounded card with a
+            full-bleed image on the left and the form on the right. Below
+            `md` the welcome panel is hidden and the form panel becomes
+            the whole card. */}
         <div
-          className="bg-card border-soft shadow-float-lg flex flex-col"
+          className="bg-card border-soft shadow-float-lg flex flex-col md:flex-row"
           style={{ borderRadius: 28, overflow: "hidden" }}
         >
+          {/* WELCOME PANEL */}
+          <div
+            aria-hidden
+            className="hidden md:block"
+            style={{
+              flex: "0 0 45%",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src={orbitLoginImage}
+              alt=""
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+
+            {/* soft scrim so the overlay text stays legible regardless of
+                what part of the artwork sits behind it */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.12) 32%, rgba(255,255,255,0) 55%)",
+              }}
+            />
+
+            <div style={{ position: "relative", zIndex: 1, padding: "40px 0 0 40px" }}>
+              <span className="font-display" style={{ fontSize: 13, fontWeight: 700, color: INK, letterSpacing: 3, textTransform: "uppercase" }}>
+                orbit
+              </span>
+             
+            </div>
+          </div>
+
           {/* FORM PANEL */}
           <div className="flex flex-col justify-center" style={{ flex: 1, padding: "56px 60px" }}>
             <h1 style={{ fontSize: 34, fontWeight: 800, color: "var(--text)", margin: 0, textAlign: "center" }}>
@@ -197,8 +241,10 @@ export default function Login() {
    in styles/globals.css (--text, --text-2, --text-3, --border,
    --card) so light mode is unchanged and dark mode (set via
    Settings > Appearance) resolves to readable values automatically.
-   The primary button and "Sign up" link are the exceptions — fixed
-   brand colors (see INK/INK_DEEP/LINK_BLUE above), not themed ones.
+   The welcome-panel overlay text and primary button are the
+   exceptions — fixed brand colors (see INK/INK_DEEP/LINK_BLUE
+   above), matched to reference/orbit-login.jpe's ivory-and-indigo
+   watercolor pagoda, not themed ones.
 ============================================================ */
 
 const fieldInputStyle: CSSProperties = {
