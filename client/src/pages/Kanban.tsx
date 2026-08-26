@@ -254,15 +254,15 @@ function PillSelect({
         style={{
           appearance: "none",
           WebkitAppearance: "none",
-          background: "#EEF2F6",
-          border: "1px solid #E4E8ED",
+          background: "var(--surface-2)",
+          border: "1px solid var(--border)",
           borderRadius: 12,
           padding: icon
             ? "9px 32px 9px 32px"
             : "9px 32px 9px 14px",
           fontSize: 12.5,
           fontWeight: 600,
-          color: "#20242B",
+          color: "var(--text)",
           cursor: "pointer",
           outline: "none",
         }}
@@ -281,7 +281,7 @@ function PillSelect({
 
       <ChevronDown
         size={13}
-        color="#667085"
+        color="var(--text-2)"
         style={{
           position: "absolute",
           right: 10,
@@ -306,7 +306,7 @@ const iconButtonStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
-  color: "#98A2B3",
+  color: "var(--text-3)",
   flexShrink: 0,
 };
 
@@ -360,18 +360,35 @@ function KanbanCard({
               padding: 15,
               gap: 11,
 
+              // Mobile touch drag/drop: without this, the browser's own
+              // gesture recognizer (deciding "is this touch a scroll, a
+              // double-tap-zoom, or a drag?") competes with
+              // @hello-pangea/dnd's own touch sensor for the same
+              // touchstart, which is what "drag begins slowly / feels
+              // delayed" actually is — not the library's sensor itself
+              // (its long-press threshold is a fixed, already-fast
+              // 120ms). `manipulation` tells the browser up front that
+              // only panning/pinch-zoom are native gestures here (no
+              // double-tap-zoom delay to disambiguate), letting the
+              // library's own touchstart/touchmove handling take over
+              // immediately instead of racing the browser for the same
+              // gesture. Doesn't disable touch scrolling — that's still
+              // handled by the column's own vertical scroll and the
+              // board's horizontal one.
+              touchAction: "manipulation",
+
               cursor: snapshot.isDragging
                 ? "grabbing"
                 : task.canEdit
                   ? "grab"
                   : "pointer",
 
-              background: "#FFFFFF",
+              background: "var(--card)",
 
               border:
                 snapshot.isDragging
-                  ? "1px solid #8EA7BF"
-                  : "1px solid #E4E8ED",
+                  ? "1px solid var(--blue-dark)"
+                  : "1px solid var(--border)",
 
               boxShadow:
                 snapshot.isDragging
@@ -438,7 +455,7 @@ function KanbanCard({
                 style={{
                   fontSize: 13.5,
                   fontWeight: 650,
-                  color: "#20242B",
+                  color: "var(--text)",
                   marginBottom: 5,
                   lineHeight: 1.4,
                 }}
@@ -462,7 +479,7 @@ function KanbanCard({
             <div
               style={{
                 fontSize: 11,
-                color: "#667085",
+                color: "var(--text-2)",
                 fontWeight: 600,
                 paddingTop: 2,
               }}
@@ -570,9 +587,9 @@ function KanbanColumn({
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        background: "#F7F8FA",
+        background: "var(--surface)",
         border:
-          "1px solid #E4E8ED",
+          "1px solid var(--border)",
         borderRadius: 18,
         padding: 14,
         minHeight: 520,
@@ -587,7 +604,7 @@ function KanbanColumn({
           padding:
             "4px 4px 10px",
           borderBottom:
-            "1px solid #E4E8ED",
+            "1px solid var(--border)",
         }}
       >
         <div
@@ -600,7 +617,7 @@ function KanbanColumn({
             style={{
               fontSize: 14,
               fontWeight: 650,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             {label}
@@ -613,9 +630,9 @@ function KanbanColumn({
               padding: "0 6px",
               borderRadius: 999,
               background:
-                "#EEF2F6",
+                "var(--surface-2)",
               color:
-                "#667085",
+                "var(--text-2)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -685,7 +702,7 @@ function KanbanColumn({
               padding: 4,
               background:
                 snapshot.isDraggingOver
-                  ? "#EEF2F6"
+                  ? "var(--surface-2)"
                   : "transparent",
               transition:
                 "background 160ms ease",
@@ -720,7 +737,7 @@ function KanbanColumn({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#98A2B3",
+                    color: "var(--text-3)",
                     fontSize: 12,
                     border:
                       "1px dashed #D9DEE5",
@@ -752,7 +769,7 @@ function KanbanColumn({
               "9px 6px",
             fontSize: 12.5,
             fontWeight: 600,
-            color: "#667085",
+            color: "var(--text-2)",
             borderRadius: 10,
           }}
           onClick={onNewTask}
@@ -771,7 +788,7 @@ function KanbanColumn({
 
    Sits to the right of the Kanban columns (below them on narrower
    viewports — see the flex wrapper in the main return). Deliberately
-   styled like another Kanban column/card (same #F7F8FA/#E4E8ED/18px
+   styled like another Kanban column/card (same var(--surface)/var(--border)/18px
    panel shell, same white 1px-bordered item cards, same Pill priority
    styling as KanbanCard) rather than a distinct dashboard widget.
 
@@ -858,15 +875,22 @@ function MissedDeadlinesPanel({
 
   return (
     <div
-      className="fade-in-static"
+      // A fixed 520px minHeight matches the board's column height at
+      // `lg`+, where this panel sits beside them and should visually
+      // balance. Below `lg` it stacks full-width beneath the whole
+      // (horizontally-scrolling, multi-column) board instead — forcing
+      // the same 520px there just padded the page with empty space
+      // under a panel that might only have one or two real items,
+      // pushing genuinely-important content further down the phone's
+      // scroll. Sizes to content on mobile; unchanged at `lg`+.
+      className="fade-in-static lg:min-h-[520px]"
       style={{
         display: "flex",
         flexDirection: "column",
-        background: "#F7F8FA",
-        border: "1px solid #E4E8ED",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 18,
         padding: 14,
-        minHeight: 520,
         height: "100%",
       }}
     >
@@ -877,7 +901,7 @@ function MissedDeadlinesPanel({
         style={{
           marginBottom: 14,
           padding: "4px 4px 10px",
-          borderBottom: "1px solid #E4E8ED",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         <div className="flex items-center" style={{ gap: 8 }}>
@@ -885,7 +909,7 @@ function MissedDeadlinesPanel({
             style={{
               fontSize: 14,
               fontWeight: 650,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             Missed Deadlines
@@ -900,11 +924,11 @@ function MissedDeadlinesPanel({
               background:
                 missedTasks.length > 0
                   ? "rgba(179,86,75,0.12)"
-                  : "#EEF2F6",
+                  : "var(--surface-2)",
               color:
                 missedTasks.length > 0
                   ? "#B3564B"
-                  : "#667085",
+                  : "var(--text-2)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -936,7 +960,7 @@ function MissedDeadlinesPanel({
             style={{
               fontSize: 12.5,
               fontWeight: 650,
-              color: "#20242B",
+              color: "var(--text)",
             }}
           >
             No missed deadlines
@@ -975,8 +999,8 @@ function MissedDeadlinesPanel({
                 flexDirection: "column",
                 gap: 6,
                 cursor: "pointer",
-                background: "#FFFFFF",
-                border: "1px solid #E4E8ED",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
                 boxShadow: "0 4px 18px rgba(32,36,43,0.07)",
               }}
             >
@@ -998,7 +1022,7 @@ function MissedDeadlinesPanel({
                     style={{
                       fontSize: 12.5,
                       fontWeight: 650,
-                      color: "#20242B",
+                      color: "var(--text)",
                       lineHeight: 1.4,
                     }}
                   >
@@ -1026,7 +1050,7 @@ function MissedDeadlinesPanel({
                 <span
                   style={{
                     fontSize: 11,
-                    color: "#667085",
+                    color: "var(--text-2)",
                     fontWeight: 600,
                   }}
                 >
@@ -1723,7 +1747,7 @@ export default function Kanban() {
                 fontSize: 26,
                 fontWeight: 600,
                 color:
-                  "#20242B",
+                  "var(--text)",
                 margin: 0,
               }}
             >
@@ -1768,7 +1792,7 @@ export default function Kanban() {
               <Search
                 size={14}
                 strokeWidth={1.8}
-                color="#98A2B3"
+                color="var(--text-3)"
               />
 
               <input
@@ -1794,7 +1818,7 @@ export default function Kanban() {
                     12.5,
                   flex: 1,
                   color:
-                    "#20242B",
+                    "var(--text)",
                   minWidth: 0,
                 }}
               />
@@ -1807,9 +1831,9 @@ export default function Kanban() {
                 className="lift"
                 style={{
                   background:
-                    "#20242B",
+                    "var(--text)",
                   color:
-                    "#F7F8FA",
+                    "var(--surface)",
                   border:
                     "none",
                   borderRadius:
@@ -1861,7 +1885,7 @@ export default function Kanban() {
               icon={
                 <SlidersHorizontal
                   size={12}
-                  color="#667085"
+                  color="var(--text-2)"
                 />
               }
             />
@@ -1892,7 +1916,7 @@ export default function Kanban() {
               icon={
                 <ArrowUpDown
                   size={12}
-                  color="#667085"
+                  color="var(--text-2)"
                 />
               }
             />
@@ -1963,7 +1987,7 @@ export default function Kanban() {
                       fontWeight:
                         500,
                       color:
-                        "#20242B",
+                        "var(--text)",
                       cursor:
                         "pointer",
                     }}
@@ -1992,7 +2016,7 @@ export default function Kanban() {
                       fontWeight:
                         500,
                       color:
-                        "#20242B",
+                        "var(--text)",
                       cursor:
                         "pointer",
                     }}
@@ -2036,6 +2060,15 @@ export default function Kanban() {
                 alignItems:
                   "flex-start",
                 width: "100%",
+                // This strip's only native gesture is its own
+                // horizontal scroll — pan-x makes that unambiguous to
+                // the browser immediately for touches starting on the
+                // gutter/column background (not on a card, where the
+                // card's own touchAction above takes over instead).
+                // Vertical touches starting here still reach the page's
+                // normal scroll — pan-x doesn't block the other axis,
+                // it just stops this element from contesting it.
+                touchAction: "pan-x",
               }}
             >
               {COLUMNS.map(

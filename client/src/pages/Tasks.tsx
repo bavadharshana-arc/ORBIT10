@@ -361,10 +361,14 @@ export default function Tasks() {
     string | null
   >(() => searchParams.get("task"));
 
+  // Dashboard's "Create Task" action (GreetingCard.tsx) deep-links here
+  // with ?create=1 instead of duplicating this page's real create-task
+  // flow — same convention as ?due=Today/?date=.../?task=<id> above:
+  // opens this exact drawer/handleCreateTask, nothing reimplemented.
   const [
     isCreateDrawerOpen,
     setIsCreateDrawerOpen,
-  ] = useState(false);
+  ] = useState(() => searchParams.get("create") === "1");
 
   /* ==========================================================
      SELECTED TASK

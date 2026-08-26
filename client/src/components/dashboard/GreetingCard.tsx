@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Sparkles, ArrowUpRight } from "lucide-react";
+import { Sparkles, ArrowUpRight, Plus } from "lucide-react";
 import { Pill } from "../ui/Pill";
 import { SquiggleUnderline } from "../doodles/SquiggleUnderline";
 import { CelestialDivider } from "../doodles/CelestialDivider";
@@ -33,6 +33,8 @@ export interface GreetingCardProps {
   tasksDueToday: number;
   activeProjectCount: number;
   hasAnyProjects: boolean;
+  /** Real workspace-manager + has-a-project gate — same isWorkspaceManager(workspaceRole) check Tasks.tsx/Kanban.tsx/Projects.tsx already use for their own "New Task"/"New Project" actions. Hidden entirely (not just gated) for anyone who genuinely can't create a task, same as those pages. */
+  canCreateTask: boolean;
 }
 
 const TIME_OF_DAY = (hour: number): "morning" | "afternoon" | "evening" => {
@@ -82,7 +84,7 @@ const HERO_SCATTER_STARS: { left: string; top: string; size: number; color: stri
   { left: "99%", top: "50%", size: 6, color: "var(--blue-dark)", opacity: 0.5 },
 ];
 
-export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects }: GreetingCardProps) {
+export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects, canCreateTask }: GreetingCardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -134,10 +136,19 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
               a soft-edged illustration, not a photo cutout.
           Opacity is kept in the "clearly visible" 0.55–0.85 range the
           artwork asked for, not faded to near-nothing. */}
-      <img
-        src={celestialArtwork}
-        alt=""
-        aria-hidden="true"
+      {/* Mobile dark-mode fix: `transform` and `mix-blend-mode` on the
+          SAME element is a known cross-browser inconsistency (notably
+          iOS Safari) — the transform promotes the element onto its own
+          compositing layer, and the multiply blend then composites
+          against opaque white instead of this card's actual --surface-2
+          background, leaving the "cream paper" square visible as a
+          white rectangle instead of disappearing into the card. Same
+          bug either theme, but invisible in light mode (wrong-white
+          looks identical to right-white against a light card) and
+          glaring in dark mode. Fix: the transform lives on this
+          wrapper (for centering only); mix-blend-mode/mask stay on the
+          <img>, which now has no transform of its own. */}
+      <div
         className="w-[56%] sm:w-[46%] lg:w-[38%]"
         style={{
           position: "absolute",
@@ -146,14 +157,24 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
           transform: "translateY(-50%)",
           maxWidth: 340,
           aspectRatio: "1 / 1",
-          objectFit: "cover",
-          mixBlendMode: "multiply",
-          opacity: 0.82,
-          WebkitMaskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
-          maskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
           pointerEvents: "none",
         }}
-      />
+      >
+        <img
+          src={celestialArtwork}
+          alt=""
+          aria-hidden="true"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            mixBlendMode: "multiply",
+            opacity: 0.82,
+            WebkitMaskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
+            maskImage: "radial-gradient(circle at 46% 48%, black 52%, transparent 85%)",
+          }}
+        />
+      </div>
 
       {/* ============================================================
           RIGHT-SIDE CELESTIAL COMPOSITION — compact corner orbit
@@ -359,7 +380,41 @@ export function GreetingCard({ tasksDueToday, activeProjectCount, hasAnyProjects
           {summary}
         </p>
 
-        <div className="flex items-center" style={{ gap: 10 }}>
+        <div className="flex flex-wrap items-center" style={{ gap: 10 }}>
+          {/* Dashboard-mobile-audit follow-up: this page previously had
+              no Create Task entry point at all (not a mobile
+              regression — CreateTaskDrawer was never wired up here,
+              only in Tasks.tsx/Kanban.tsx/ProjectWorkspace.tsx). Rather
+              than duplicate that page's real create-task logic here,
+              this deep-links to Tasks.tsx's own drawer via ?create=1
+              (same convention ?due=Today below already uses) — the
+              exact existing flow, unmodified, just opened from here.
+              Gated by the same real isWorkspaceManager(workspaceRole)
+              check those pages use for their own create actions — see
+              Dashboard.tsx's canCreateTask. */}
+          {canCreateTask && (
+            <button
+              type="button"
+              onClick={() => navigate("/tasks?create=1")}
+              style={{
+                background: "var(--blue-dark)",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: 14,
+                padding: "11px 18px",
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Plus size={15} />
+              Create task
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => navigate("/tasks?due=Today")}

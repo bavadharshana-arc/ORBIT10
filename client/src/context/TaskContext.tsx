@@ -115,11 +115,28 @@ export function TaskProvider({ children }: TaskProviderProps) {
 
     Promise.resolve()
       .then(() => {
-        if (cancelled || !currentWorkspaceId || projects.length === 0) {
+        if (cancelled || !currentWorkspaceId) {
           return null;
         }
         setIsLoading(true);
         setError(null);
+        // Root cause of the "demo shows New Task/New Project, a real
+        // account's brand-new workspace doesn't" discrepancy: this used
+        // to skip the whole fetch — including listWorkspaceMembers —
+        // whenever `projects.length === 0`. Workspace membership isn't
+        // conditional on any project existing, but useWorkspaceRole()
+        // (Kanban.tsx, Projects.tsx, Tasks.tsx) derives the signed-in
+        // user's role from `workspaceMembers` here, so a workspace with
+        // zero projects — every brand-new registered account's first
+        // workspace, before seed.ts-style pre-populated demo data —
+        // left even its real OWNER's role stuck at null, hiding "New
+        // Task"/"New Project" (isWorkspaceManager(null) is false) at
+        // exactly the moment a new owner needs them to create their
+        // first project. The demo workspace never hit this because
+        // seed.ts always gives it 3 projects up front. Members now
+        // always fetch once a workspace is active; tasks still
+        // correctly resolve to [] when there are no projects to map
+        // (Promise.all([]) below, no behavior change there).
         return Promise.all([
           listWorkspaceMembers(currentWorkspaceId),
           Promise.all(projects.map((project) => listTasks(currentWorkspaceId, project.id))),
@@ -128,7 +145,7 @@ export function TaskProvider({ children }: TaskProviderProps) {
       .then((result) => {
         if (cancelled) return;
 
-        if (!currentWorkspaceId || projects.length === 0 || !result) {
+        if (!currentWorkspaceId || !result) {
           setTasks([]);
           setWorkspaceMembers([]);
           return;

@@ -23,6 +23,7 @@ import { getProjectCreatedAt, getTaskCreatedAt, getTaskCompletedAt } from "../da
 import { startOfDay, addDays, isSameDay, parseIsoDate, formatShortDate } from "../components/timeline/GanttTimeline";
 import { useTaskContext } from "../context/taskContextValue";
 import { useProjectContext } from "../context/projectContextValue";
+import { useWorkspaceRole, isWorkspaceManager } from "../hooks/useWorkspaceRole";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -40,6 +41,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { tasks } = useTaskContext();
   const { projects } = useProjectContext();
+  // Same real gate Tasks.tsx/Kanban.tsx/Projects.tsx use for their own
+  // create actions (see hooks/useWorkspaceRole.ts) — a project must
+  // exist to have somewhere to put the new task, and the signed-in
+  // user must actually be able to create one.
+  const workspaceRole = useWorkspaceRole();
+  const canCreateTask = isWorkspaceManager(workspaceRole) && projects.length > 0;
 
   // Real "today" — used for the weekly-activity window and StatCard
   // math below, independent of whichever month the MiniCalendar is
@@ -240,6 +247,7 @@ export default function Dashboard() {
         tasksDueToday={tasksDueToday}
         activeProjectCount={activeProjects.length}
         hasAnyProjects={projects.length > 0}
+        canCreateTask={canCreateTask}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 14, marginBottom: 18 }}>
