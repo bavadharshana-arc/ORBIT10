@@ -1,7 +1,10 @@
 import { createApp } from "./app";
 import { logError, logInfo } from "./lib/logger";
 
-const PORT = 5000;
+// Render (and most PaaS hosts) assign the listen port dynamically via
+// process.env.PORT; 5000 remains the local dev fallback (matches
+// client/src/lib/api.ts's default VITE_API_URL).
+const PORT = Number(process.env.PORT) || 5000;
 
 // ORBIT Step 9 (Error Handling + Logging): a backstop for anything that
 // escapes every route's own try/catch and the app-level errorHandler
@@ -23,5 +26,5 @@ process.on("unhandledRejection", (reason) => {
 const app = createApp();
 
 app.listen(PORT, () => {
-  logInfo("index", `ORBIT server running on http://localhost:${PORT}`);
+  logInfo("index", `ORBIT server listening on port ${PORT}`);
 });
