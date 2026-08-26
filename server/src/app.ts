@@ -29,6 +29,19 @@ import { errorHandler, notFoundHandler } from "./middleware/error.middleware";
 export function createApp() {
   const app = express();
 
+  // Render (and most PaaS hosts) sit the app behind a reverse proxy, so
+  // every request arrives with an X-Forwarded-For header set by that
+  // proxy. Without telling Express to trust it, express-rate-limit
+  // refuses to trust that header either (correctly, since blindly
+  // trusting an attacker-supplied X-Forwarded-For would let them spoof
+  // whatever IP they want) and throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+  // instead of silently using the wrong IP. `1` trusts exactly the
+  // nearest hop (Render's own edge proxy) rather than the whole chain,
+  // which is what actually produced the header — not `true` (trust
+  // everything). Harmless locally: nothing sets X-Forwarded-For in dev,
+  // so req.ip still resolves to the real connection either way.
+  app.set("trust proxy", 1);
+
   // Phase 18: the frontend now makes real cross-origin requests (Vite dev
   // server on a different port than this API) for the first time — no
   // route before this needed a browser to actually reach it. No cookies
