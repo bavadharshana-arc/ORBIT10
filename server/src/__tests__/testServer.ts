@@ -18,7 +18,7 @@ export async function startTestServer() {
       const address = server.address() as AddressInfo;
       resolve({
         baseUrl: `http://127.0.0.1:${address.port}`,
-        close: () => new Promise<void>((res, rej) => server.close((err) => (err ? rej(err) : res()))),
+        close: () => new Promise<void>((res, rej) => server.close((err?: Error) => (err ? rej(err) : res()))),
       });
     });
     server.on("error", reject);
