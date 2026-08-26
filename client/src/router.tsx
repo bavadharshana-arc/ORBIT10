@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PublicRoute from "./components/auth/PublicRoute";
 import RequireRole from "./components/auth/RequireRole";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
@@ -81,8 +82,16 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: "/login", element: <Login /> },
-  { path: "/register", element: <Register /> },
-  { path: "/forgot-password", element: <ForgotPassword /> },
-  { path: "/reset-password", element: <ResetPassword /> },
+  {
+    // Signed-out-only screens — PublicRoute sends an already-authenticated
+    // visitor straight to "/" instead of leaving them on a login/register/
+    // password form for a session that's already valid (see PublicRoute.tsx).
+    element: <PublicRoute />,
+    children: [
+      { path: "/login", element: <Login /> },
+      { path: "/register", element: <Register /> },
+      { path: "/forgot-password", element: <ForgotPassword /> },
+      { path: "/reset-password", element: <ResetPassword /> },
+    ],
+  },
 ]);
