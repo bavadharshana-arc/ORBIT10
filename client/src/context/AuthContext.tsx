@@ -5,12 +5,7 @@ import { clearAuthToken, getAuthToken, setAuthToken } from "../lib/api";
 import { loginRequest, registerRequest, type LoginResult, type RegisteredUser } from "../lib/authApi";
 import { getMyProfile } from "../lib/userApi";
 
-// These 5 emails must be real, registered users (seeded by
-// server/prisma/seed.ts's RBAC-demo block) with a shared demo password.
-// This map only decides which AuthRole a *verified* login resolves to —
-// the backend has no user-wide "role" column (AuthRole is a UI-gating
-// vocabulary separate from WorkspaceRole/ProjectRole). Any other real,
-// successfully-authenticated email resolves to "Owner".
+
 const DEMO_ROLE_BY_EMAIL: Record<string, AuthRole> = {
   "owner@orbit.dev": "Owner",
   "admin@orbit.dev": "Admin",
@@ -23,7 +18,6 @@ function resolveRole(email: string): AuthRole {
   return DEMO_ROLE_BY_EMAIL[email.trim().toLowerCase()] ?? "Owner";
 }
 
-/** Derives display initials from a full name, e.g. "Jordan Avery" -> "JA". */
 function getInitials(name: string): string {
   const initials = name
     .trim()
